@@ -55,7 +55,7 @@ app.post("/api/v1/integrations/tickets", requireToken(["INTEGRATION", "ADMIN"]),
 }));
 
 app.post("/api/v1/tickets", requireUser, upload.array("attachments", 10), validateUploadTotal, handle(async (req, res) => {
-  const result = await createTicket({ payload: req.body, files: req.files || [], source: "helpdesk-ui", uploadedBy: req.helpdeskUser.email });
+  const result = await createTicket({ payload: req.body, files: req.files || [], source: "helpdesk-ui", uploadedBy: req.helpdeskUser.email, actorUserId: req.helpdeskUser.id });
   res.status(result.duplicate ? 200 : 201).json(result);
 }));
 app.get("/api/v1/tickets", requireUser, handle(async (req, res) => res.json(await listTickets(req.query))));
@@ -64,8 +64,8 @@ app.get("/api/v1/tickets/:id", requireUser, handle(async (req, res) => {
   if (!ticket) return res.status(404).json({ error: "Ticket no encontrado" });
   return res.json({ data: ticket });
 }));
-app.patch("/api/v1/tickets/:id", requireUser, handle(async (req, res) => res.json({ data: await updateTicket(req.params.id, req.body) })));
-app.post("/api/v1/tickets/:id/messages", requireUser, handle(async (req, res) => res.json({ data: await addMessage(req.params.id, req.body) })));
+app.patch("/api/v1/tickets/:id", requireUser, handle(async (req, res) => res.json({ data: await updateTicket(req.params.id, req.body, req.helpdeskUser.id) })));
+app.post("/api/v1/tickets/:id/messages", requireUser, handle(async (req, res) => res.json({ data: await addMessage(req.params.id, req.body, req.helpdeskUser.id) })));
 app.get("/api/v1/tickets/:id/attachments/:attachmentId", requireUser, handle(async (req, res) => {
   const attachment = await getAttachmentFile(req.params.id, req.params.attachmentId);
   if (!attachment) return res.status(404).json({ error: "Adjunto no encontrado" });

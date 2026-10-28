@@ -18,6 +18,18 @@ const objectValue = (value, fallback = {}) => {
   }
   return fallback;
 };
+const slaHours = (priority) => ({ URGENT: { first: 1, resolution: 4 }, HIGH: { first: 4, resolution: 16 }, LOW: { first: 16, resolution: 80 }, MEDIUM: { first: 8, resolution: 40 } }[priority] || { first: 8, resolution: 40 });
+const mapSla = (row) => {
+  const now = Date.now();
+  const firstDue = row.sla_first_response_due_at ? new Date(row.sla_first_response_due_at) : null;
+  const resolutionDue = row.sla_resolution_due_at ? new Date(row.sla_resolution_due_at) : null;
+  const finalStatus = ["RESOLVED", "CLOSED"].includes(row.status);
+  const firstBreached = !row.first_response_at && firstDue && firstDue.getTime() < now;
+  const resolutionBreached = !finalStatus && resolutionDue && resolutionDue.getTime() < now;
+  const firstRisk = !row.first_response_at && firstDue && firstDue.getTime() >= now && firstDue.getTime() - now <= 2 * 60 * 60 * 1000;
+  const resolutionRisk = !finalStatus && resolutionDue && resolutionDue.getTime() >= now && resolutionDue.getTime() - now <= 8 * 60 * 60 * 1000;
+  return { firstResponseDueAt: row.sla_first_response_due_at, resolutionDueAt: row.sla_resolution_due_at, firstResponseAt: row.first_response_at, resolvedAt: row.resolved_at, firstResponseBreached: Boolean(firstBreached), resolutionBreached: Boolean(resolutionBreached), atRisk: Boolean(firstRisk || resolutionRisk), state: firstBreached || resolutionBreached ? "BREACHED" : firstRisk || resolutionRisk ? "AT_RISK" : "ON_TRACK" };
+};
 
 const mapTicket = (row) => ({
   id: row.id,
@@ -33,6 +45,7 @@ const mapTicket = (row) => ({
   assignedTo: row.assigned_user_id ? { id: row.assigned_user_id, name: row.assigned_user_name || "", email: row.assigned_user_email || "" } : null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  sla: mapSla(row),
 });
 
 const validatePayload = (payload = {}) => {
@@ -42,7 +55,7 @@ const validatePayload = (payload = {}) => {
   return { title, description };
 };
 
-export const createTicket = async ({ payload = {}, source = "unknown", files = [], uploadedBy = source }) => {
+export const createTicket = async ({ payload = {}, source = "unknown", files = [], uploadedBy = source, actorUserId = null }) => {
   const { title, description } = validatePayload(payload);
   const externalId = text(payload.externalId ?? payload.external_id, 120) || null;
   const pool = await getPool();
@@ -57,36 +70,47 @@ export const createTicket = async ({ payload = {}, source = "unknown", files = [
 
   const requester = objectValue(payload.requester ?? payload.solicitante);
   const requestType = normalize(payload.requestType ?? payload.request_type ?? payload.tipo, requestTypes, "OTHER");
+  const priority = normalize(payload.priority ?? payload.prioridad, priorities, "MEDIUM");
+  const sla = slaHours(priority);
   const insert = await pool.request()
     .input("source", sql.NVarChar(80), text(source, 80) || "unknown")
     .input("externalId", sql.NVarChar(120), externalId)
     .input("title", sql.NVarChar(200), title)
     .input("description", sql.NVarChar(sql.MAX), description)
     .input("requestType", sql.NVarChar(30), requestType)
-    .input("priority", sql.NVarChar(20), normalize(payload.priority ?? payload.prioridad, priorities, "MEDIUM"))
+    .input("priority", sql.NVarChar(20), priority)
     .input("requesterName", sql.NVarChar(200), text(requester.name ?? requester.nombre, 200) || null)
     .input("requesterEmail", sql.NVarChar(254), text(requester.email ?? requester.correo, 254) || null)
+    .input("firstDue", sql.DateTime2, new Date(Date.now() + sla.first * 60 * 60 * 1000))
+    .input("resolutionDue", sql.DateTime2, new Date(Date.now() + sla.resolution * 60 * 60 * 1000))
     .query(`INSERT INTO dbo.hd_tickets
-      (source, external_id, title, description, request_type, priority, requester_name, requester_email)
+      (source, external_id, title, description, request_type, priority, requester_name, requester_email, sla_first_response_due_at, sla_resolution_due_at)
       OUTPUT INSERTED.*
-      VALUES (@source, @externalId, @title, @description, @requestType, @priority, @requesterName, @requesterEmail)`);
+      VALUES (@source, @externalId, @title, @description, @requestType, @priority, @requesterName, @requesterEmail, @firstDue, @resolutionDue)`);
   const row = insert.recordset[0];
   const attachments = await addAttachments({ ticketId: row.id, files, uploadedBy });
+  await pool.request().input("ticketId", sql.Int, row.id).input("actorUserId", sql.Int, actorUserId).input("eventType", sql.NVarChar(40), "CREATED").input("message", sql.NVarChar(1000), `Ticket creado desde ${text(source, 80) || "origen desconocido"}`).query("INSERT INTO dbo.hd_ticket_events (ticket_id, actor_user_id, event_type, message) VALUES (@ticketId, @actorUserId, @eventType, @message)");
   return { duplicate: false, ticket: mapTicket(row), attachments };
 };
 
-export const listTickets = async ({ status = "", priority = "", search = "", limit = 50 } = {}) => {
+export const listTickets = async ({ status = "", priority = "", requestType = "", assignedUserId = "", sla = "", search = "", limit = 50 } = {}) => {
   const pool = await getPool();
   const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
   const request = pool.request()
     .input("status", sql.NVarChar(20), normalize(status, statuses, ""))
     .input("priority", sql.NVarChar(20), normalize(priority, priorities, ""))
+    .input("requestType", sql.NVarChar(30), normalize(requestType, requestTypes, ""))
+    .input("assignedUserId", sql.Int, positiveInt(assignedUserId))
+    .input("sla", sql.NVarChar(20), text(sla, 20).toUpperCase())
     .input("search", sql.NVarChar(120), `%${text(search, 120)}%`)
     .input("limit", sql.Int, safeLimit);
   const result = await request.query(`SELECT TOP (@limit) t.*, u.display_name AS assigned_user_name, u.email AS assigned_user_email
     FROM dbo.hd_tickets t LEFT JOIN dbo.hd_users u ON u.id = t.assigned_user_id
     WHERE (@status = N'' OR t.status = @status)
       AND (@priority = N'' OR t.priority = @priority)
+      AND (@requestType = N'' OR t.request_type = @requestType)
+      AND (@assignedUserId IS NULL OR t.assigned_user_id = @assignedUserId)
+      AND (@sla = N'' OR (@sla = N'UNASSIGNED' AND t.assigned_user_id IS NULL) OR (@sla = N'BREACHED' AND ((t.first_response_at IS NULL AND t.sla_first_response_due_at < SYSUTCDATETIME()) OR (t.status NOT IN (N'RESOLVED', N'CLOSED') AND t.sla_resolution_due_at < SYSUTCDATETIME()))) OR (@sla = N'AT_RISK' AND ((t.first_response_at IS NULL AND t.sla_first_response_due_at BETWEEN SYSUTCDATETIME() AND DATEADD(HOUR, 2, SYSUTCDATETIME())) OR (t.status NOT IN (N'RESOLVED', N'CLOSED') AND t.sla_resolution_due_at BETWEEN SYSUTCDATETIME() AND DATEADD(HOUR, 8, SYSUTCDATETIME())))))
       AND (@search = N'%%' OR t.ticket_code LIKE @search OR t.title LIKE @search OR t.requester_email LIKE @search)
     ORDER BY t.updated_at DESC, t.id DESC`);
   return { data: result.recordset.map(mapTicket), total: result.recordset.length };
@@ -101,10 +125,12 @@ export const getTicket = async (id) => {
   if (!ticketResult.recordset[0]) return null;
   const messages = await pool.request().input("ticketId", sql.Int, ticketId)
     .query("SELECT id, author_type, author_name, message, created_at FROM dbo.hd_messages WHERE ticket_id = @ticketId ORDER BY created_at, id");
-  return { ...mapTicket(ticketResult.recordset[0]), messages: messages.recordset, attachments: await listAttachments(ticketId) };
+  const events = await pool.request().input("ticketId", sql.Int, ticketId)
+    .query("SELECT e.id, e.event_type, e.from_value, e.to_value, e.message, e.created_at, u.display_name AS actor_name FROM dbo.hd_ticket_events e LEFT JOIN dbo.hd_users u ON u.id = e.actor_user_id WHERE e.ticket_id = @ticketId ORDER BY e.created_at, e.id");
+  return { ...mapTicket(ticketResult.recordset[0]), messages: messages.recordset, events: events.recordset, attachments: await listAttachments(ticketId) };
 };
 
-export const updateTicket = async (id, payload = {}) => {
+export const updateTicket = async (id, payload = {}, actorUserId = null) => {
   const ticketId = positiveInt(id);
   if (!ticketId) throw Object.assign(new Error("Ticket inválido"), { status: 400 });
   const status = normalize(payload.status ?? payload.estado, statuses, null);
@@ -116,6 +142,9 @@ export const updateTicket = async (id, payload = {}) => {
   if ((payload.priority !== undefined || payload.prioridad !== undefined) && !priority) throw Object.assign(new Error("Prioridad inválida"), { status: 400 });
   if (assignmentProvided && assignedValue && !assignedUserId) throw Object.assign(new Error("Usuario asignado inválido"), { status: 400 });
   const pool = await getPool();
+  const beforeResult = await pool.request().input("id", sql.Int, ticketId).query("SELECT TOP 1 * FROM dbo.hd_tickets WHERE id = @id");
+  const before = beforeResult.recordset[0];
+  if (!before) throw Object.assign(new Error("Ticket no encontrado"), { status: 404 });
   if (assignedUserId) {
     const assigned = await pool.request().input("assignedUserId", sql.Int, assignedUserId)
       .query("SELECT TOP 1 id FROM dbo.hd_users WHERE id = @assignedUserId AND active = 1");
@@ -129,21 +158,29 @@ export const updateTicket = async (id, payload = {}) => {
     .query(`UPDATE dbo.hd_tickets SET
       status = COALESCE(@status, status), priority = COALESCE(@priority, priority),
       assigned_user_id = CASE WHEN @assignmentProvided = 1 THEN @assignedUserId ELSE assigned_user_id END,
+      resolved_at = CASE WHEN @status IN (N'RESOLVED', N'CLOSED') AND resolved_at IS NULL THEN SYSUTCDATETIME() WHEN @status IN (N'OPEN', N'IN_PROGRESS', N'WAITING') THEN NULL ELSE resolved_at END,
       updated_at = SYSUTCDATETIME()
       WHERE id = @id`);
+  const changes = [];
+  if (status && status !== before.status) changes.push(["STATUS_CHANGED", before.status, status, `Estado cambiado a ${status}`]);
+  if (priority && priority !== before.priority) changes.push(["PRIORITY_CHANGED", before.priority, priority, `Prioridad cambiada a ${priority}`]);
+  if (assignmentProvided && String(before.assigned_user_id || "") !== String(assignedUserId || "")) changes.push(["ASSIGNED", before.assigned_user_id ? String(before.assigned_user_id) : "", assignedUserId ? String(assignedUserId) : "", assignedUserId ? "Ticket asignado" : "Asignación retirada"]);
+  for (const [eventType, fromValue, toValue, message] of changes) await pool.request().input("ticketId", sql.Int, ticketId).input("actorUserId", sql.Int, actorUserId).input("eventType", sql.NVarChar(40), eventType).input("fromValue", sql.NVarChar(500), fromValue || null).input("toValue", sql.NVarChar(500), toValue || null).input("message", sql.NVarChar(1000), message).query("INSERT INTO dbo.hd_ticket_events (ticket_id, actor_user_id, event_type, from_value, to_value, message) VALUES (@ticketId, @actorUserId, @eventType, @fromValue, @toValue, @message)");
   return getTicket(ticketId);
 };
 
-export const addMessage = async (id, payload = {}) => {
+export const addMessage = async (id, payload = {}, actorUserId = null) => {
   const ticketId = positiveInt(id);
   const message = text(payload.message, 100000);
   if (!ticketId || !message) throw Object.assign(new Error("Ticket y mensaje son obligatorios"), { status: 400 });
+  const authorType = ["PUBLIC", "INTERNAL"].includes(String(payload.visibility || payload.authorType || "").toUpperCase()) ? String(payload.visibility || payload.authorType).toUpperCase() : "INTERNAL";
   const pool = await getPool();
   await pool.request().input("ticketId", sql.Int, ticketId)
-    .input("authorType", sql.NVarChar(20), "INTERNAL")
+    .input("authorType", sql.NVarChar(20), authorType)
     .input("authorName", sql.NVarChar(200), text(payload.authorName, 200) || "Helpdesk")
     .input("message", sql.NVarChar(sql.MAX), message)
-    .query("INSERT INTO dbo.hd_messages (ticket_id, author_type, author_name, message) VALUES (@ticketId, @authorType, @authorName, @message); UPDATE dbo.hd_tickets SET updated_at = SYSUTCDATETIME() WHERE id = @ticketId");
+    .query("INSERT INTO dbo.hd_messages (ticket_id, author_type, author_name, message) VALUES (@ticketId, @authorType, @authorName, @message); UPDATE dbo.hd_tickets SET updated_at = SYSUTCDATETIME(), first_response_at = CASE WHEN @authorType = N'PUBLIC' AND first_response_at IS NULL THEN SYSUTCDATETIME() ELSE first_response_at END WHERE id = @ticketId");
+  await pool.request().input("ticketId", sql.Int, ticketId).input("actorUserId", sql.Int, actorUserId).input("eventType", sql.NVarChar(40), "COMMENT_ADDED").input("message", sql.NVarChar(1000), authorType === "PUBLIC" ? "Respuesta pública agregada" : "Nota interna agregada").query("INSERT INTO dbo.hd_ticket_events (ticket_id, actor_user_id, event_type, message) VALUES (@ticketId, @actorUserId, @eventType, @message)");
   return getTicket(ticketId);
 };
 

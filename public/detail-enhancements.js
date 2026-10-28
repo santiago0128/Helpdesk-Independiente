@@ -1,0 +1,34 @@
+/* Enhanced Jira-style ticket detail: conversation visibility and audit timeline. */
+let enhancedTicketId = null;
+let renderingEnhancedDetail = false;
+
+const enhancedMessage = (message) => `<article class="message ${String(message.author_type || "INTERNAL").toLowerCase()}"><div class="message-top"><strong>${escapeHtml(message.author_name || "Helpdesk")}</strong><span class="message-visibility">${message.author_type === "PUBLIC" ? "Respuesta pública" : "Nota interna"}</span></div><div>${escapeHtml(message.message)}</div><small>${new Date(message.created_at).toLocaleString()}</small></article>`;
+const enhancedEvent = (event) => `<li><span class="activity-dot"></span><div><strong>${escapeHtml({ CREATED: "Ticket creado", STATUS_CHANGED: "Estado actualizado", PRIORITY_CHANGED: "Prioridad actualizada", ASSIGNED: "Responsable actualizado", COMMENT_ADDED: "Comentario agregado" }[event.event_type] || event.event_type || "Actividad")}</strong><p>${escapeHtml(event.message || "")}</p><small>${escapeHtml(event.actor_name || "Sistema")} · ${new Date(event.created_at).toLocaleString()}</small></div></li>`;
+
+const renderEnhancedDetail = async (id) => {
+  if (renderingEnhancedDetail || !id) return;
+  renderingEnhancedDetail = true;
+  try {
+    const result = await api(`/api/v1/tickets/${id}`);
+    const ticket = result.data;
+    const attachments = ticket.attachments || [];
+    const assigneeOptions = `<option value="">Sin asignar</option>${users.filter((user) => user.active).map((user) => `<option value="${user.id}" ${ticket.assignedTo?.id === user.id ? "selected" : ""}>${escapeHtml(user.name)} · ${escapeHtml(user.email)}</option>`).join("")}`;
+    const attachmentHtml = attachments.length ? `<div class="attachments"><h3>Adjuntos (${attachments.length})</h3>${attachments.map((attachment) => `<button type="button" class="attachment-link" data-attachment-id="${attachment.id}" data-attachment-name="${escapeHtml(attachment.name)}">${attachmentIcon(attachment.mimeType)} ${escapeHtml(attachment.name)} <small>${formatBytes(attachment.sizeBytes)}</small></button>`).join("")}</div>` : "";
+    $("detail").dataset.enhancedTicketId = String(id);
+    $("detail").innerHTML = `<div class="detail-header"><div><div class="detail-title"><span class="eyebrow">${escapeHtml(ticket.number)}</span><span class="badge ${typeClass(ticket.requestType)}">${escapeHtml(typeLabels[ticket.requestType] || "Otro")}</span><span class="badge ${statusClass(ticket.status)}">${escapeHtml(statusLabels[ticket.status] || ticket.status)}</span>${ticket.sla ? `<span class="badge ${slaClass(ticket.sla)}">${escapeHtml(slaLabel(ticket.sla))}</span>` : ""}</div><h2>${escapeHtml(ticket.title)}</h2><p class="detail-description">${escapeHtml(ticket.description)}</p></div><div class="detail-actions"><select id="enhanced-status"><option value="OPEN" ${ticket.status === "OPEN" ? "selected" : ""}>Abierto</option><option value="IN_PROGRESS" ${ticket.status === "IN_PROGRESS" ? "selected" : ""}>En proceso</option><option value="WAITING" ${ticket.status === "WAITING" ? "selected" : ""}>En espera</option><option value="RESOLVED" ${ticket.status === "RESOLVED" ? "selected" : ""}>Resuelto</option><option value="CLOSED" ${ticket.status === "CLOSED" ? "selected" : ""}>Cerrado</option></select><select id="enhanced-assignee" title="Asignar responsable">${assigneeOptions}</select><button id="enhanced-close-detail" class="secondary">Cerrar</button></div></div>${attachmentHtml}<div class="detail-layout"><div><div class="section-heading"><h3>Conversación</h3><span>${(ticket.messages || []).length} mensajes</span></div><div class="messages">${(ticket.messages || []).map(enhancedMessage).join("") || "<p class=\"empty-state\">Aún no hay mensajes.</p>"}</div><form id="enhanced-message-form" class="message-form"><label>Agregar actualización<select id="enhanced-message-visibility"><option value="INTERNAL">Nota interna — solo el equipo</option><option value="PUBLIC">Respuesta pública — visible para el solicitante</option></select><textarea id="enhanced-message" rows="3" placeholder="Escribe una actualización para este ticket..." required></textarea></label><button class="primary-button">Guardar actualización</button></form></div><aside class="activity-panel"><div class="section-heading"><h3>Actividad</h3><span>Historial</span></div><ol class="activity-list">${(ticket.events || []).map(enhancedEvent).join("") || "<li class=\"empty-state\">Sin actividad registrada.</li>"}</ol></aside></div>`;
+    $("enhanced-close-detail").addEventListener("click", () => { $("detail").hidden = true; $("detail").dataset.enhancedTicketId = ""; });
+    $("enhanced-status").addEventListener("change", async (event) => { try { await api(`/api/v1/tickets/${id}`, { method: "PATCH", body: JSON.stringify({ status: event.target.value }) }); showNotice("Estado actualizado"); await loadTickets(); await renderEnhancedDetail(id); } catch (error) { showNotice(error.message, true); } });
+    $("enhanced-assignee").addEventListener("change", async (event) => { try { await api(`/api/v1/tickets/${id}`, { method: "PATCH", body: JSON.stringify({ assignedUserId: event.target.value || null }) }); showNotice(event.target.value ? "Ticket asignado" : "Asignación retirada"); await loadTickets(); await renderEnhancedDetail(id); } catch (error) { showNotice(error.message, true); } });
+    document.querySelectorAll(".attachment-link").forEach((button) => button.addEventListener("click", () => downloadAttachment(id, button.dataset.attachmentId, button.dataset.attachmentName).catch((error) => showNotice(error.message, true))));
+    $("enhanced-message-form").addEventListener("submit", async (event) => { event.preventDefault(); try { await api(`/api/v1/tickets/${id}/messages`, { method: "POST", body: JSON.stringify({ message: $("enhanced-message").value, visibility: $("enhanced-message-visibility").value, authorName: helpdeskUser?.name || "Helpdesk" }) }); showNotice("Actualización guardada"); await renderEnhancedDetail(id); } catch (error) { showNotice(error.message, true); } });
+  } catch (error) {
+    showNotice(error.message, true);
+  } finally {
+    renderingEnhancedDetail = false;
+  }
+};
+
+document.addEventListener("click", (event) => { const card = event.target.closest(".kanban-card"); if (card) enhancedTicketId = card.dataset.id; }, true);
+document.addEventListener("click", (event) => { if (event.target.closest("#close-detail")) enhancedTicketId = null; });
+const detailObserver = new MutationObserver(() => { const detail = $("detail"); if (!detail || detail.hidden || !enhancedTicketId || detail.dataset.enhancedTicketId === String(enhancedTicketId)) return; window.setTimeout(() => renderEnhancedDetail(enhancedTicketId), 0); });
+detailObserver.observe($("detail"), { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });

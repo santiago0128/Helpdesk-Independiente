@@ -54,7 +54,7 @@
             <div id="workspace-grid" class="workspace-grid">
               <section class="card tickets-card">
                 <div class="card-heading"><div><p class="eyebrow">Bandeja de entrada</p><h2>Tablero de tickets</h2><p class="board-hint">Arrastra las tarjetas para cambiar su estado.</p></div><span class="jira-mark muted-mark">TK</span></div>
-                <div class="filters"><div class="search-wrap"><span>⌕</span><input id="search" placeholder="Buscar por título, código o correo..." /></div><select id="status"><option value="">Todos los estados</option><option value="OPEN">Abiertos</option><option value="IN_PROGRESS">En proceso</option><option value="WAITING">En espera</option><option value="RESOLVED">Resueltos</option><option value="CLOSED">Cerrados</option></select></div>
+                <div class="filters"><div class="search-wrap"><span>⌕</span><input id="search" placeholder="Buscar por título, código o correo..." /></div><select id="status"><option value="">Todos los estados</option><option value="OPEN">Abiertos</option><option value="IN_PROGRESS">En proceso</option><option value="WAITING">En espera</option><option value="RESOLVED">Resueltos</option><option value="CLOSED">Cerrados</option></select><select id="priority-filter"><option value="">Todas las prioridades</option><option value="URGENT">Urgentes</option><option value="HIGH">Altas</option><option value="MEDIUM">Medias</option><option value="LOW">Bajas</option></select><select id="type-filter"><option value="">Todos los tipos</option><option value="BUG">Bugs</option><option value="FEATURE">Funcionalidades</option><option value="QUESTION">Consultas</option><option value="ACCESS">Accesos</option><option value="OTHER">Otros</option></select><select id="assignee-filter"><option value="">Todos los responsables</option><option value="UNASSIGNED">Sin asignar</option></select><select id="sla-filter"><option value="">Todos los SLA</option><option value="AT_RISK">SLA en riesgo</option><option value="BREACHED">SLA vencido</option></select></div>
                 <div id="tickets" class="tickets"></div>
               </section>
             </div>
@@ -88,5 +88,6 @@
       </section>
     </main>
     <script src="/app.js"></script>
+    <script src="/detail-enhancements.js"></script>
   </body>
 </html>
