@@ -32,6 +32,8 @@
             <form id="ticket-form">
               <label>Título<input id="title" maxlength="200" required /></label>
               <label>Descripción<textarea id="description" rows="7" required></textarea></label>
+              <label>Adjuntos<input id="attachments" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt" /></label>
+              <div id="attachment-preview" class="attachment-preview"></div>
               <div class="two-columns">
                 <label>Prioridad<select id="priority"><option value="LOW">Baja</option><option value="MEDIUM" selected>Media</option><option value="HIGH">Alta</option><option value="URGENT">Urgente</option></select></label>
                 <label>Correo del solicitante<input id="requester-email" type="email" maxlength="254" /></label>

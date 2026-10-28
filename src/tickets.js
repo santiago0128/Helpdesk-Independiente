@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getPool, sql } from "./db.js";
+import { addAttachments, listAttachments } from "./attachments.js";
 
 const statuses = ["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED", "CLOSED"];
 const priorities = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -8,6 +9,13 @@ const positiveInt = (value) => Number.isInteger(Number(value)) && Number(value) 
 const normalize = (value, values, fallback) => {
   const normalized = text(value, 20).toUpperCase();
   return values.includes(normalized) ? normalized : fallback;
+};
+const objectValue = (value, fallback = {}) => {
+  if (value && typeof value === "object") return value;
+  if (typeof value === "string") {
+    try { return JSON.parse(value); } catch { return fallback; }
+  }
+  return fallback;
 };
 
 const mapTicket = (row) => ({
@@ -31,10 +39,9 @@ const validatePayload = (payload = {}) => {
   return { title, description };
 };
 
-export const createTicket = async ({ payload = {}, source = "unknown" }) => {
+export const createTicket = async ({ payload = {}, source = "unknown", files = [], uploadedBy = source }) => {
   const { title, description } = validatePayload(payload);
   const externalId = text(payload.externalId ?? payload.external_id, 120) || null;
-  const requester = payload.requester || payload.solicitante || {};
   const pool = await getPool();
 
   if (externalId) {
@@ -42,9 +49,10 @@ export const createTicket = async ({ payload = {}, source = "unknown" }) => {
       .input("source", sql.NVarChar(80), text(source, 80))
       .input("externalId", sql.NVarChar(120), externalId)
       .query("SELECT TOP 1 * FROM dbo.hd_tickets WHERE source = @source AND external_id = @externalId");
-    if (existing.recordset[0]) return { duplicate: true, ticket: mapTicket(existing.recordset[0]) };
+    if (existing.recordset[0]) return { duplicate: true, ticket: mapTicket(existing.recordset[0]), attachments: await listAttachments(existing.recordset[0].id) };
   }
 
+  const requester = objectValue(payload.requester ?? payload.solicitante);
   const insert = await pool.request()
     .input("source", sql.NVarChar(80), text(source, 80) || "unknown")
     .input("externalId", sql.NVarChar(120), externalId)
@@ -58,7 +66,8 @@ export const createTicket = async ({ payload = {}, source = "unknown" }) => {
       OUTPUT INSERTED.*
       VALUES (@source, @externalId, @title, @description, @priority, @requesterName, @requesterEmail)`);
   const row = insert.recordset[0];
-  return { duplicate: false, ticket: mapTicket(row) };
+  const attachments = await addAttachments({ ticketId: row.id, files, uploadedBy });
+  return { duplicate: false, ticket: mapTicket(row), attachments };
 };
 
 export const listTickets = async ({ status = "", priority = "", search = "", limit = 50 } = {}) => {
@@ -86,7 +95,7 @@ export const getTicket = async (id) => {
   if (!ticketResult.recordset[0]) return null;
   const messages = await pool.request().input("ticketId", sql.Int, ticketId)
     .query("SELECT id, author_type, author_name, message, created_at FROM dbo.hd_messages WHERE ticket_id = @ticketId ORDER BY created_at, id");
-  return { ...mapTicket(ticketResult.recordset[0]), messages: messages.recordset };
+  return { ...mapTicket(ticketResult.recordset[0]), messages: messages.recordset, attachments: await listAttachments(ticketId) };
 };
 
 export const updateTicket = async (id, payload = {}) => {

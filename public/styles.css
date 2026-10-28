@@ -20,4 +20,10 @@ button.secondary { background: #eef3f9; color: #47566e; } .two-columns { display
 .badge { display: inline-block; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 800; background: #eaf3ff; color: #2874bd; white-space: nowrap; }
 .notice, .error { margin-top: 12px; color: #bd4b36; } .notice { padding: 12px; border-radius: 10px; background: #edf9f1; color: #267341; } .detail { margin-top: 22px; }
 .message { padding: 12px; border-left: 3px solid #159bd7; background: #f7faff; margin: 8px 0; } .message small { color: #77849a; }
+.attachment-preview { display: grid; gap: 6px; color: #53627a; font-size: 12px; }
+.attachment-preview:empty { display: none; }
+.attachments { display: grid; gap: 8px; margin: 18px 0; padding: 14px; background: #f7faff; border: 1px solid #e4e9f1; border-radius: 12px; }
+.attachments h3 { margin: 0 0 4px; font-size: 14px; color: #53627a; }
+.attachment-link { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: white; color: #2874bd; border: 1px solid #dbe5f2; padding: 9px 10px; }
+.attachment-link small { margin-left: auto; color: #77849a; font-weight: 500; }
 @media (max-width: 840px) { .grid { grid-template-columns: 1fr; } .two-columns, .filters { grid-template-columns: 1fr; } .shell { padding: 16px; } }
