@@ -1,4 +1,4 @@
-.dashboard-heading[hidden], #dashboard-heading[hidden], #stats[hidden], #workspace-grid[hidden], #create-modal[hidden], #create-panel[hidden], #detail[hidden], #user-panel[hidden] { display: none !important; }
+.dashboard-heading[hidden], #dashboard-heading[hidden], #stats[hidden], #workspace-grid[hidden], #create-modal[hidden], #create-panel[hidden], #edit-user-modal[hidden], #role-modal[hidden], #detail[hidden], #user-panel[hidden] { display: none !important; }
 .workspace-grid { display: block; }
 .tickets-card { width: 100%; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(9, 30, 66, .55); backdrop-filter: blur(2px); }
