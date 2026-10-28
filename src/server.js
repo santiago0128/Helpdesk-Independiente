@@ -11,6 +11,7 @@ import { requireToken } from "./auth.js";
 import { createRole, createUser, listRoles, listUsers, loginUser, logoutUser, requireAdmin, requireAnyPermission, requirePermission, requireUser, updateRole, updateUser } from "./userAuth.js";
 import { getAttachmentFile, uploadTempDir } from "./attachments.js";
 import { addMessage, createTicket, getTicket, listTickets, updateTicket } from "./tickets.js";
+import { emailStatus, notifyTicketChanged, notifyTicketCreated } from "./email.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -48,14 +49,17 @@ app.patch("/api/v1/users/:id", requireUser, requireAdmin, handle(async (req, res
 app.get("/api/v1/roles", requireUser, requireAnyPermission(["MANAGE_USERS", "MANAGE_ROLES"]), handle(async (_req, res) => res.json({ data: await listRoles() })));
 app.post("/api/v1/roles", requireUser, requirePermission("MANAGE_ROLES"), handle(async (req, res) => res.status(201).json({ data: await createRole(req.body || {}) })));
 app.patch("/api/v1/roles/:id", requireUser, requirePermission("MANAGE_ROLES"), handle(async (req, res) => res.json({ data: await updateRole(req.params.id, req.body || {}) })));
+app.get("/api/v1/notifications/status", requireUser, requireAdmin, handle(async (_req, res) => res.json({ data: emailStatus() })));
 
 app.post("/api/v1/integrations/tickets", requireToken(["INTEGRATION", "ADMIN"]), upload.array("attachments", 10), validateUploadTotal, handle(async (req, res) => {
   const result = await createTicket({ payload: req.body, files: req.files || [], source: req.helpdeskToken.source });
+  if (!result.duplicate) void notifyTicketCreated(result.ticket);
   res.status(result.duplicate ? 200 : 201).json({ message: result.duplicate ? "Ticket existente" : "Ticket creado", ...result });
 }));
 
 app.post("/api/v1/tickets", requireUser, upload.array("attachments", 10), validateUploadTotal, handle(async (req, res) => {
   const result = await createTicket({ payload: req.body, files: req.files || [], source: "helpdesk-ui", uploadedBy: req.helpdeskUser.email, actorUserId: req.helpdeskUser.id });
+  if (!result.duplicate) void notifyTicketCreated(result.ticket);
   res.status(result.duplicate ? 200 : 201).json(result);
 }));
 app.get("/api/v1/tickets", requireUser, handle(async (req, res) => res.json(await listTickets(req.query))));
@@ -64,7 +68,12 @@ app.get("/api/v1/tickets/:id", requireUser, handle(async (req, res) => {
   if (!ticket) return res.status(404).json({ error: "Ticket no encontrado" });
   return res.json({ data: ticket });
 }));
-app.patch("/api/v1/tickets/:id", requireUser, handle(async (req, res) => res.json({ data: await updateTicket(req.params.id, req.body, req.helpdeskUser.id) })));
+app.patch("/api/v1/tickets/:id", requireUser, handle(async (req, res) => {
+  const before = await getTicket(req.params.id);
+  const ticket = await updateTicket(req.params.id, req.body, req.helpdeskUser.id);
+  if (before) void notifyTicketChanged({ before, ticket });
+  return res.json({ data: ticket });
+}));
 app.post("/api/v1/tickets/:id/messages", requireUser, handle(async (req, res) => res.json({ data: await addMessage(req.params.id, req.body, req.helpdeskUser.id) })));
 app.get("/api/v1/tickets/:id/attachments/:attachmentId", requireUser, handle(async (req, res) => {
   const attachment = await getAttachmentFile(req.params.id, req.params.attachmentId);
