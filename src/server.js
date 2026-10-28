@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getPool, sql } from "./db.js";
 import { requireToken } from "./auth.js";
+import { loginUser, logoutUser, requireUser } from "./userAuth.js";
 import { addMessage, createTicket, getTicket, listTickets, updateTicket } from "./tickets.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -26,19 +27,27 @@ app.get("/api/v1/health", handle(async (_req, res) => {
   res.json({ ok: true, service: "helpdesk" });
 }));
 
+app.post("/api/v1/auth/login", handle(async (req, res) => res.json(await loginUser(req.body || {}))));
+app.get("/api/v1/auth/me", requireUser, handle(async (req, res) => res.json({ user: req.helpdeskUser })));
+app.post("/api/v1/auth/logout", requireUser, handle(async (req, res) => { await logoutUser(req); res.json({ ok: true }); }));
+
 app.post("/api/v1/integrations/tickets", requireToken(["INTEGRATION", "ADMIN"]), handle(async (req, res) => {
   const result = await createTicket({ payload: req.body, source: req.helpdeskToken.source });
   res.status(result.duplicate ? 200 : 201).json({ message: result.duplicate ? "Ticket existente" : "Ticket creado", ...result });
 }));
 
-app.get("/api/v1/tickets", requireToken(["ADMIN"]), handle(async (req, res) => res.json(await listTickets(req.query))));
-app.get("/api/v1/tickets/:id", requireToken(["ADMIN"]), handle(async (req, res) => {
+app.post("/api/v1/tickets", requireUser, handle(async (req, res) => {
+  const result = await createTicket({ payload: req.body, source: "helpdesk-ui" });
+  res.status(result.duplicate ? 200 : 201).json(result);
+}));
+app.get("/api/v1/tickets", requireUser, handle(async (req, res) => res.json(await listTickets(req.query))));
+app.get("/api/v1/tickets/:id", requireUser, handle(async (req, res) => {
   const ticket = await getTicket(req.params.id);
   if (!ticket) return res.status(404).json({ error: "Ticket no encontrado" });
   return res.json({ data: ticket });
 }));
-app.patch("/api/v1/tickets/:id", requireToken(["ADMIN"]), handle(async (req, res) => res.json({ data: await updateTicket(req.params.id, req.body) })));
-app.post("/api/v1/tickets/:id/messages", requireToken(["ADMIN"]), handle(async (req, res) => res.json({ data: await addMessage(req.params.id, req.body) })));
+app.patch("/api/v1/tickets/:id", requireUser, handle(async (req, res) => res.json({ data: await updateTicket(req.params.id, req.body) })));
+app.post("/api/v1/tickets/:id/messages", requireUser, handle(async (req, res) => res.json({ data: await addMessage(req.params.id, req.body) })));
 
 app.use(express.static(path.resolve(__dirname, "../public")));
 app.get("*", (_req, res) => res.sendFile(path.resolve(__dirname, "../public/index.html")));

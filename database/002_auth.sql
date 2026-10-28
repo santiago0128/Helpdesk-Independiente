@@ -1,0 +1,32 @@
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+SET ANSI_PADDING ON;
+SET ANSI_WARNINGS ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET ARITHABORT ON;
+SET NUMERIC_ROUNDABORT OFF;
+
+IF OBJECT_ID(N'dbo.hd_users', N'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.hd_users (
+    id INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    email NVARCHAR(254) NOT NULL UNIQUE,
+    password_hash NVARCHAR(300) NOT NULL,
+    display_name NVARCHAR(160) NOT NULL,
+    role NVARCHAR(30) NOT NULL CONSTRAINT DF_hd_users_role DEFAULT N'AGENT',
+    active BIT NOT NULL CONSTRAINT DF_hd_users_active DEFAULT 1,
+    created_at DATETIME2(3) NOT NULL CONSTRAINT DF_hd_users_created DEFAULT SYSUTCDATETIME()
+  );
+END;
+IF OBJECT_ID(N'dbo.hd_sessions', N'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.hd_sessions (
+    id INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    user_id INT NOT NULL,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at DATETIME2(3) NOT NULL,
+    created_at DATETIME2(3) NOT NULL CONSTRAINT DF_hd_sessions_created DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT FK_hd_sessions_user FOREIGN KEY(user_id) REFERENCES dbo.hd_users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IX_hd_sessions_expiry ON dbo.hd_sessions(expires_at);
+END;

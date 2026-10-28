@@ -11,9 +11,10 @@
       <section id="login" class="card login-card">
         <div class="brand">REVEX <span>HELPDESK</span></div>
         <h1>Mesa de ayuda</h1>
-        <p>Ingresa un token administrativo para consultar y gestionar los tickets.</p>
+        <p>Ingresa con tu usuario para consultar y gestionar los tickets.</p>
         <form id="login-form">
-          <label>Token administrativo<input id="login-token" type="password" autocomplete="off" required /></label>
+          <label>Correo<input id="login-email" type="email" autocomplete="username" required /></label>
+          <label>Contraseña<input id="login-password" type="password" autocomplete="current-password" required /></label>
           <button type="submit">Entrar</button>
           <div id="login-error" class="error"></div>
         </form>

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "token": "node scripts/create-token.mjs"
+    "token": "node scripts/create-token.mjs",
+    "user": "node scripts/create-user.mjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
