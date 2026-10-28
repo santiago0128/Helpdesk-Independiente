@@ -58,18 +58,20 @@
                 <div id="tickets" class="tickets"></div>
               </section>
             </div>
-            <section class="card composer-card create-modal" id="create-panel" hidden>
-              <div class="card-heading"><div><p class="eyebrow">Nueva solicitud</p><h2>Crear ticket</h2></div><button type="button" id="close-create" class="secondary">Cerrar</button></div>
-              <form id="ticket-form">
-                <label>Título<input id="title" maxlength="200" placeholder="Ej. No puedo cargar una cotización" required /></label>
-                <label>Descripción<textarea id="description" rows="6" placeholder="Describe el problema, los pasos para reproducirlo y el resultado esperado." required></textarea></label>
-                <div class="two-columns"><label>Tipo de solicitud<select id="request-type"><option value="BUG">Bug / error</option><option value="FEATURE">Nueva funcionalidad</option><option value="QUESTION">Consulta</option><option value="ACCESS">Acceso o permisos</option><option value="OTHER" selected>Otro</option></select></label><label>Prioridad<select id="priority"><option value="LOW">Baja</option><option value="MEDIUM" selected>Media</option><option value="HIGH">Alta</option><option value="URGENT">Urgente</option></select></label></div>
-                <label>Adjuntos <span class="label-help">Imágenes, videos, documentos o audio</span><input id="attachments" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt" /></label>
-                <div id="attachment-preview" class="attachment-preview"></div>
-                <div class="two-columns"><label>Correo del solicitante<input id="requester-email" type="email" maxlength="254" /></label><label>Nombre del solicitante<input id="requester-name" maxlength="200" /></label></div>
-                <button type="submit" class="primary-button">Crear solicitud</button>
-              </form>
-            </section>
+            <div id="create-modal" class="modal-backdrop" hidden>
+              <section class="card composer-card modal-card" id="create-panel" role="dialog" aria-modal="true" aria-labelledby="create-modal-title">
+                <div class="card-heading"><div><p class="eyebrow">Nueva solicitud</p><h2 id="create-modal-title">Crear ticket</h2></div><button type="button" id="close-create" class="secondary">Cerrar</button></div>
+                <form id="ticket-form">
+                  <label>Título<input id="title" maxlength="200" placeholder="Ej. No puedo cargar una cotización" required /></label>
+                  <label>Descripción<textarea id="description" rows="6" placeholder="Describe el problema, los pasos para reproducirlo y el resultado esperado." required></textarea></label>
+                  <div class="two-columns"><label>Tipo de solicitud<select id="request-type"><option value="BUG">Bug / error</option><option value="FEATURE">Nueva funcionalidad</option><option value="QUESTION">Consulta</option><option value="ACCESS">Acceso o permisos</option><option value="OTHER" selected>Otro</option></select></label><label>Prioridad<select id="priority"><option value="LOW">Baja</option><option value="MEDIUM" selected>Media</option><option value="HIGH">Alta</option><option value="URGENT">Urgente</option></select></label></div>
+                  <label>Adjuntos <span class="label-help">Imágenes, videos, documentos o audio</span><input id="attachments" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt" /></label>
+                  <div id="attachment-preview" class="attachment-preview"></div>
+                  <div class="two-columns"><label>Correo del solicitante<input id="requester-email" type="email" maxlength="254" /></label><label>Nombre del solicitante<input id="requester-name" maxlength="200" /></label></div>
+                  <button type="submit" class="primary-button">Crear solicitud</button>
+                </form>
+              </section>
+            </div>
             <section id="detail" class="card detail" hidden></section>
             <section id="user-panel" class="user-panel" hidden>
               <div class="page-heading"><div><p class="eyebrow">Administración</p><h2>Usuarios de la mesa de ayuda</h2><p>Gestiona agentes y administradores que pueden recibir tickets.</p></div><span class="jira-mark">US</span></div>
