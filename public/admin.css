@@ -62,6 +62,30 @@
 @media (max-width: 1100px) { .filters { grid-template-columns: repeat(3, minmax(140px, 1fr)); } }
 @media (max-width: 760px) { .user-admin-grid { grid-template-columns: 1fr; }.user-row { flex-wrap: wrap; }.user-role { margin-left: 46px; }.user-status { margin-left: auto; }.role-row { flex-wrap: wrap; }.role-row code { order: 3; margin-left: 0; }.filters { grid-template-columns: 1fr; }.modal-backdrop { align-items: flex-end; padding: 0; }.modal-card { max-height: 92vh; border-radius: 14px 14px 0 0; }.detail:not([hidden]) { inset: 0; max-height: 100vh; padding: 18px; border-radius: 0; }.detail-layout { grid-template-columns: 1fr; }.detail-actions { align-items: stretch; flex-wrap: wrap; }.detail-control { flex: 1 1 160px; } }
 
+/* Motion system */
+@keyframes helpdesk-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes helpdesk-modal-in { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes helpdesk-rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes helpdesk-card-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+body:has(#detail:not([hidden]))::before { content: ""; position: fixed; inset: 0; z-index: 1700; background: rgba(9, 30, 66, .42); backdrop-filter: blur(3px); animation: helpdesk-backdrop-in .2s ease-out both; }
+.detail:not([hidden]) { animation: helpdesk-modal-in .24s cubic-bezier(.2, .8, .2, 1) both; }
+.detail:not([hidden]) .detail-header { animation: helpdesk-rise-in .28s .04s ease-out both; }
+.detail:not([hidden]) .attachments { animation: helpdesk-rise-in .28s .08s ease-out both; }
+.detail:not([hidden]) .detail-layout { animation: helpdesk-rise-in .28s .12s ease-out both; }
+.detail:not([hidden]) .message { animation: helpdesk-rise-in .24s ease-out both; }
+.detail:not([hidden]) .message:nth-child(2) { animation-delay: .04s; }
+.detail:not([hidden]) .message:nth-child(3) { animation-delay: .08s; }
+.detail:not([hidden]) .activity-list li { animation: helpdesk-rise-in .24s ease-out both; }
+.detail:not([hidden]) .activity-list li:nth-child(2) { animation-delay: .04s; }
+.detail:not([hidden]) .activity-list li:nth-child(3) { animation-delay: .08s; }
+.kanban-card { animation: helpdesk-card-in .22s ease-out both; }
+.kanban-card:nth-child(2) { animation-delay: .03s; }
+.kanban-card:nth-child(3) { animation-delay: .06s; }
+.kanban-card:nth-child(4) { animation-delay: .09s; }
+.primary-button, .secondary, .ticket-open-button, .attachment-link, .nav-item { transition: background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease; }
+.primary-button:active, .secondary:active, .ticket-open-button:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+
 /* Visual polish: compact Jira-like workspace */
 body { background: #f4f5f7; }
 .app-layout { background: #f4f5f7; }
