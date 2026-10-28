@@ -12,6 +12,7 @@ import { createRole, createUser, listRoles, listUsers, loginUser, logoutUser, re
 import { getAttachmentFile, uploadTempDir } from "./attachments.js";
 import { addMessage, createTicket, getTicket, listTickets, updateTicket } from "./tickets.js";
 import { emailStatus, notifyTicketChanged, notifyTicketCreated } from "./email.js";
+import { deleteRole } from "./roleDeletion.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -49,6 +50,7 @@ app.patch("/api/v1/users/:id", requireUser, requireAdmin, handle(async (req, res
 app.get("/api/v1/roles", requireUser, requireAnyPermission(["MANAGE_USERS", "MANAGE_ROLES"]), handle(async (_req, res) => res.json({ data: await listRoles() })));
 app.post("/api/v1/roles", requireUser, requirePermission("MANAGE_ROLES"), handle(async (req, res) => res.status(201).json({ data: await createRole(req.body || {}) })));
 app.patch("/api/v1/roles/:id", requireUser, requirePermission("MANAGE_ROLES"), handle(async (req, res) => res.json({ data: await updateRole(req.params.id, req.body || {}) })));
+app.delete("/api/v1/roles/:id", requireUser, requirePermission("MANAGE_ROLES"), handle(async (req, res) => res.json({ data: await deleteRole(req.params.id) })));
 app.get("/api/v1/notifications/status", requireUser, requireAdmin, handle(async (_req, res) => res.json({ data: emailStatus() })));
 
 app.post("/api/v1/integrations/tickets", requireToken(["INTEGRATION", "ADMIN"]), upload.array("attachments", 10), validateUploadTotal, handle(async (req, res) => {

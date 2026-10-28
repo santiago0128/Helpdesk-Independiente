@@ -49,6 +49,8 @@
 .role-row-main strong { color: #172b4d; font-size: 13px; }
 .role-row-main span { color: #6b778c; font-size: 11px; line-height: 1.4; }
 .role-row code { color: #6b778c; font-size: 10px; }
+.role-delete { color: #de350b; }
+.role-delete:hover { border-color: #ffbdad; background: #ffebe6; color: #bf2600; }
 .role-built-in { display: inline-block; margin-left: 6px; padding: 3px 6px; border-radius: 4px; background: #deebff; color: #0747a6; font-size: 9px; font-weight: 800; text-transform: uppercase; }
 .checkbox-label { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 8px; font-weight: 600; }
 .checkbox-label input { width: auto; margin: 0; }
