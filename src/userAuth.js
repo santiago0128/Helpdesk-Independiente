@@ -40,6 +40,50 @@ export const createUser = async ({ email, password, name, role = "AGENT" }) => {
   return result.recordset[0];
 };
 
+export const listUsers = async () => {
+  const pool = await getPool();
+  const result = await pool.request().query(`SELECT id, email, display_name, role, active, created_at
+    FROM dbo.hd_users ORDER BY active DESC, display_name, id`);
+  return result.recordset.map((user) => ({
+    id: user.id,
+    email: user.email,
+    name: user.display_name,
+    role: user.role,
+    active: Boolean(user.active),
+    createdAt: user.created_at,
+  }));
+};
+
+export const updateUser = async (id, payload = {}) => {
+  const userId = Number(id);
+  if (!Number.isInteger(userId) || userId <= 0) throw Object.assign(new Error("Usuario inválido"), { status: 400 });
+  const name = clean(payload.name ?? payload.displayName, 160);
+  const role = payload.role === "ADMIN" ? "ADMIN" : payload.role === "AGENT" ? "AGENT" : null;
+  const activeProvided = payload.active !== undefined;
+  const active = activeProvided ? Boolean(payload.active) : null;
+  const password = String(payload.password || "");
+  if (payload.name !== undefined && !name) throw Object.assign(new Error("El nombre es obligatorio"), { status: 400 });
+  if (password && password.length < 10) throw Object.assign(new Error("La contraseña debe tener mínimo 10 caracteres"), { status: 400 });
+  const pool = await getPool();
+  const hash = password ? await passwordHash(password) : null;
+  const result = await pool.request()
+    .input("id", sql.Int, userId)
+    .input("name", sql.NVarChar(160), name || null)
+    .input("role", sql.NVarChar(30), role)
+    .input("active", sql.Bit, active)
+    .input("passwordHash", sql.NVarChar(300), hash)
+    .query(`UPDATE dbo.hd_users SET
+      display_name = COALESCE(@name, display_name),
+      role = COALESCE(@role, role),
+      active = COALESCE(@active, active),
+      password_hash = COALESCE(@passwordHash, password_hash)
+      OUTPUT INSERTED.id, INSERTED.email, INSERTED.display_name, INSERTED.role, INSERTED.active
+      WHERE id = @id`);
+  if (!result.recordset[0]) throw Object.assign(new Error("Usuario no encontrado"), { status: 404 });
+  const user = result.recordset[0];
+  return { id: user.id, email: user.email, name: user.display_name, role: user.role, active: Boolean(user.active) };
+};
+
 export const loginUser = async ({ email, password }) => {
   const pool = await getPool();
   const result = await pool.request().input("email", sql.NVarChar(254), clean(email, 254).toLowerCase())
@@ -86,4 +130,9 @@ export const logoutUser = async (req) => {
   const pool = await getPool();
   await pool.request().input("tokenHash", sql.VarChar(64), sessionHash(rawToken))
     .query("DELETE FROM dbo.hd_sessions WHERE token_hash = @tokenHash");
+};
+
+export const requireAdmin = (req, res, next) => {
+  if (req.helpdeskUser?.role !== "ADMIN") return res.status(403).json({ error: "Solo un administrador puede realizar esta acción" });
+  return next();
 };

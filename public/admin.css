@@ -1,0 +1,9 @@
+.workspace-grid { display: block; }
+.tickets-card { width: 100%; }
+.create-modal { margin-top: 20px; }
+.user-admin-grid { display: grid; grid-template-columns: minmax(280px, .7fr) minmax(420px, 1.3fr); gap: 20px; }
+.user-form-card, .user-list-card { padding: 24px; }
+.users-list { display: grid; gap: 0; margin-top: 20px; }
+.user-row { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid #ebecf0; }
+.user-row:last-child { border-bottom: 0; }.user-row-avatar { display: grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; background: #deebff; color: #0747a6; font-size: 13px; font-weight: 800; }.user-row-main { display: grid; flex: 1; min-width: 0; gap: 3px; }.user-row-main strong { overflow: hidden; color: #172b4d; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }.user-row-main span { overflow: hidden; color: #6b778c; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.user-role { color: #6b778c; font-size: 11px; white-space: nowrap; }.user-status { padding: 5px 9px; border: 0; border-radius: 4px; font-size: 10px; font-weight: 800; }.user-status.active { background: #e3fcef; color: #006644; }.user-status.inactive { background: #ffebe6; color: #de350b; }
+@media (max-width: 760px) { .user-admin-grid { grid-template-columns: 1fr; }.user-row { flex-wrap: wrap; }.user-role { margin-left: 46px; }.user-status { margin-left: auto; } }

@@ -30,6 +30,7 @@ const mapTicket = (row) => ({
   priority: row.priority,
   status: row.status,
   requester: { name: row.requester_name || "", email: row.requester_email || "" },
+  assignedTo: row.assigned_user_id ? { id: row.assigned_user_id, name: row.assigned_user_name || "", email: row.assigned_user_email || "" } : null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -82,11 +83,12 @@ export const listTickets = async ({ status = "", priority = "", search = "", lim
     .input("priority", sql.NVarChar(20), normalize(priority, priorities, ""))
     .input("search", sql.NVarChar(120), `%${text(search, 120)}%`)
     .input("limit", sql.Int, safeLimit);
-  const result = await request.query(`SELECT TOP (@limit) * FROM dbo.hd_tickets
-    WHERE (@status = N'' OR status = @status)
-      AND (@priority = N'' OR priority = @priority)
-      AND (@search = N'%%' OR ticket_code LIKE @search OR title LIKE @search OR requester_email LIKE @search)
-    ORDER BY updated_at DESC, id DESC`);
+  const result = await request.query(`SELECT TOP (@limit) t.*, u.display_name AS assigned_user_name, u.email AS assigned_user_email
+    FROM dbo.hd_tickets t LEFT JOIN dbo.hd_users u ON u.id = t.assigned_user_id
+    WHERE (@status = N'' OR t.status = @status)
+      AND (@priority = N'' OR t.priority = @priority)
+      AND (@search = N'%%' OR t.ticket_code LIKE @search OR t.title LIKE @search OR t.requester_email LIKE @search)
+    ORDER BY t.updated_at DESC, t.id DESC`);
   return { data: result.recordset.map(mapTicket), total: result.recordset.length };
 };
 
@@ -95,7 +97,7 @@ export const getTicket = async (id) => {
   if (!ticketId) throw Object.assign(new Error("Ticket inválido"), { status: 400 });
   const pool = await getPool();
   const ticketResult = await pool.request().input("id", sql.Int, ticketId)
-    .query("SELECT TOP 1 * FROM dbo.hd_tickets WHERE id = @id");
+    .query("SELECT TOP 1 t.*, u.display_name AS assigned_user_name, u.email AS assigned_user_email FROM dbo.hd_tickets t LEFT JOIN dbo.hd_users u ON u.id = t.assigned_user_id WHERE t.id = @id");
   if (!ticketResult.recordset[0]) return null;
   const messages = await pool.request().input("ticketId", sql.Int, ticketId)
     .query("SELECT id, author_type, author_name, message, created_at FROM dbo.hd_messages WHERE ticket_id = @ticketId ORDER BY created_at, id");
@@ -107,14 +109,27 @@ export const updateTicket = async (id, payload = {}) => {
   if (!ticketId) throw Object.assign(new Error("Ticket inválido"), { status: 400 });
   const status = normalize(payload.status ?? payload.estado, statuses, null);
   const priority = normalize(payload.priority ?? payload.prioridad, priorities, null);
+  const assignmentProvided = payload.assignedUserId !== undefined || payload.assigned_user_id !== undefined || payload.assigneeId !== undefined;
+  const assignedValue = payload.assignedUserId ?? payload.assigned_user_id ?? payload.assigneeId;
+  const assignedUserId = assignmentProvided && String(assignedValue ?? "").trim() ? positiveInt(assignedValue) : null;
   if ((payload.status !== undefined || payload.estado !== undefined) && !status) throw Object.assign(new Error("Estado inválido"), { status: 400 });
   if ((payload.priority !== undefined || payload.prioridad !== undefined) && !priority) throw Object.assign(new Error("Prioridad inválida"), { status: 400 });
+  if (assignmentProvided && assignedValue && !assignedUserId) throw Object.assign(new Error("Usuario asignado inválido"), { status: 400 });
   const pool = await getPool();
+  if (assignedUserId) {
+    const assigned = await pool.request().input("assignedUserId", sql.Int, assignedUserId)
+      .query("SELECT TOP 1 id FROM dbo.hd_users WHERE id = @assignedUserId AND active = 1");
+    if (!assigned.recordset[0]) throw Object.assign(new Error("El usuario asignado no existe o está inactivo"), { status: 400 });
+  }
   await pool.request().input("id", sql.Int, ticketId)
     .input("status", sql.NVarChar(20), status)
     .input("priority", sql.NVarChar(20), priority)
+    .input("assignedUserId", sql.Int, assignedUserId)
+    .input("assignmentProvided", sql.Bit, assignmentProvided)
     .query(`UPDATE dbo.hd_tickets SET
-      status = COALESCE(@status, status), priority = COALESCE(@priority, priority), updated_at = SYSUTCDATETIME()
+      status = COALESCE(@status, status), priority = COALESCE(@priority, priority),
+      assigned_user_id = CASE WHEN @assignmentProvided = 1 THEN @assignedUserId ELSE assigned_user_id END,
+      updated_at = SYSUTCDATETIME()
       WHERE id = @id`);
   return getTicket(ticketId);
 };

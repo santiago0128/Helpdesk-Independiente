@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import multer from "multer";
 import { getPool, sql } from "./db.js";
 import { requireToken } from "./auth.js";
-import { loginUser, logoutUser, requireUser } from "./userAuth.js";
+import { createUser, listUsers, loginUser, logoutUser, requireAdmin, requireUser, updateUser } from "./userAuth.js";
 import { getAttachmentFile, uploadTempDir } from "./attachments.js";
 import { addMessage, createTicket, getTicket, listTickets, updateTicket } from "./tickets.js";
 
@@ -42,6 +42,9 @@ app.get("/api/v1/health", handle(async (_req, res) => {
 app.post("/api/v1/auth/login", handle(async (req, res) => res.json(await loginUser(req.body || {}))));
 app.get("/api/v1/auth/me", requireUser, handle(async (req, res) => res.json({ user: req.helpdeskUser })));
 app.post("/api/v1/auth/logout", requireUser, handle(async (req, res) => { await logoutUser(req); res.json({ ok: true }); }));
+app.get("/api/v1/users", requireUser, requireAdmin, handle(async (_req, res) => res.json({ data: await listUsers() })));
+app.post("/api/v1/users", requireUser, requireAdmin, handle(async (req, res) => res.status(201).json({ data: await createUser(req.body || {}) })));
+app.patch("/api/v1/users/:id", requireUser, requireAdmin, handle(async (req, res) => res.json({ data: await updateUser(req.params.id, req.body || {}) })));
 
 app.post("/api/v1/integrations/tickets", requireToken(["INTEGRATION", "ADMIN"]), upload.array("attachments", 10), validateUploadTotal, handle(async (req, res) => {
   const result = await createTicket({ payload: req.body, files: req.files || [], source: req.helpdeskToken.source });

@@ -6,6 +6,7 @@
     <title>Revex Helpdesk</title>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/kanban.css" />
+    <link rel="stylesheet" href="/admin.css" />
   </head>
   <body>
     <main class="shell">
@@ -33,6 +34,7 @@
             <button class="nav-item" data-status="IN_PROGRESS"><span>↻</span> En proceso <b id="nav-progress">0</b></button>
             <button class="nav-item" data-status="WAITING"><span>◌</span> En espera <b id="nav-waiting">0</b></button>
             <button class="nav-item" data-status="RESOLVED"><span>✓</span> Resueltos <b id="nav-resolved">0</b></button>
+            <button id="users-nav" class="nav-item" data-view="users"><span>⚙</span> Usuarios</button>
           </nav>
           <div class="sidebar-footer"><div class="support-note"><strong>¿Necesitas ayuda?</strong><span>Crea una solicitud y el equipo la revisará.</span></div><button id="logout" class="logout-button">Cerrar sesión</button></div>
         </aside>
@@ -40,36 +42,42 @@
         <section class="workspace">
           <header class="topbar"><div><div class="breadcrumb">Espacio de trabajo <span>/</span> Soporte</div><h1>Centro de soporte</h1></div><div class="topbar-actions"><span class="user-pill">● Administrador</span><button id="refresh" class="secondary">↻ Actualizar</button></div></header>
           <div id="notice" class="notice" hidden></div>
-          <div class="page-content">
-            <div class="page-heading"><div><p class="eyebrow">Resumen del equipo</p><h2>Solicitudes de soporte</h2><p>Consulta, prioriza y da seguimiento a los tickets de tu operación.</p></div><button id="new-ticket" class="primary-button">＋ Nueva solicitud</button></div>
-            <div class="stats" aria-label="Resumen de tickets">
+          <div id="page-content" class="page-content">
+            <div id="dashboard-heading" class="page-heading"><div><p class="eyebrow">Resumen del equipo</p><h2>Solicitudes de soporte</h2><p>Consulta, prioriza y da seguimiento a los tickets de tu operación.</p></div><button id="new-ticket" class="primary-button">＋ Nueva solicitud</button></div>
+            <div id="stats" class="stats" aria-label="Resumen de tickets">
               <div class="stat-card"><span class="stat-icon blue">◷</span><div><small>Abiertos</small><strong id="count-open">0</strong></div></div>
               <div class="stat-card"><span class="stat-icon purple">↻</span><div><small>En proceso</small><strong id="count-progress">0</strong></div></div>
               <div class="stat-card"><span class="stat-icon orange">◌</span><div><small>En espera</small><strong id="count-waiting">0</strong></div></div>
               <div class="stat-card"><span class="stat-icon green">✓</span><div><small>Resueltos</small><strong id="count-resolved">0</strong></div></div>
             </div>
 
-            <div class="workspace-grid">
-              <section class="card composer-card" id="create-panel">
-                <div class="card-heading"><div><p class="eyebrow">Nueva solicitud</p><h2>Crear ticket</h2></div><span class="jira-mark">JR</span></div>
-                <form id="ticket-form">
-                  <label>Título<input id="title" maxlength="200" placeholder="Ej. No puedo cargar una cotización" required /></label>
-                  <label>Descripción<textarea id="description" rows="6" placeholder="Describe el problema, los pasos para reproducirlo y el resultado esperado." required></textarea></label>
-                  <div class="two-columns"><label>Tipo de solicitud<select id="request-type"><option value="BUG">Bug / error</option><option value="FEATURE">Nueva funcionalidad</option><option value="QUESTION">Consulta</option><option value="ACCESS">Acceso o permisos</option><option value="OTHER" selected>Otro</option></select></label><label>Prioridad<select id="priority"><option value="LOW">Baja</option><option value="MEDIUM" selected>Media</option><option value="HIGH">Alta</option><option value="URGENT">Urgente</option></select></label></div>
-                  <label>Adjuntos <span class="label-help">Imágenes, videos, documentos o audio</span><input id="attachments" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt" /></label>
-                  <div id="attachment-preview" class="attachment-preview"></div>
-                  <div class="two-columns"><label>Correo del solicitante<input id="requester-email" type="email" maxlength="254" /></label><label>Nombre del solicitante<input id="requester-name" maxlength="200" /></label></div>
-                  <button type="submit" class="primary-button">Crear solicitud</button>
-                </form>
-              </section>
-
+            <div id="workspace-grid" class="workspace-grid">
               <section class="card tickets-card">
                 <div class="card-heading"><div><p class="eyebrow">Bandeja de entrada</p><h2>Tablero de tickets</h2><p class="board-hint">Arrastra las tarjetas para cambiar su estado.</p></div><span class="jira-mark muted-mark">TK</span></div>
                 <div class="filters"><div class="search-wrap"><span>⌕</span><input id="search" placeholder="Buscar por título, código o correo..." /></div><select id="status"><option value="">Todos los estados</option><option value="OPEN">Abiertos</option><option value="IN_PROGRESS">En proceso</option><option value="WAITING">En espera</option><option value="RESOLVED">Resueltos</option><option value="CLOSED">Cerrados</option></select></div>
                 <div id="tickets" class="tickets"></div>
               </section>
             </div>
+            <section class="card composer-card create-modal" id="create-panel" hidden>
+              <div class="card-heading"><div><p class="eyebrow">Nueva solicitud</p><h2>Crear ticket</h2></div><button type="button" id="close-create" class="secondary">Cerrar</button></div>
+              <form id="ticket-form">
+                <label>Título<input id="title" maxlength="200" placeholder="Ej. No puedo cargar una cotización" required /></label>
+                <label>Descripción<textarea id="description" rows="6" placeholder="Describe el problema, los pasos para reproducirlo y el resultado esperado." required></textarea></label>
+                <div class="two-columns"><label>Tipo de solicitud<select id="request-type"><option value="BUG">Bug / error</option><option value="FEATURE">Nueva funcionalidad</option><option value="QUESTION">Consulta</option><option value="ACCESS">Acceso o permisos</option><option value="OTHER" selected>Otro</option></select></label><label>Prioridad<select id="priority"><option value="LOW">Baja</option><option value="MEDIUM" selected>Media</option><option value="HIGH">Alta</option><option value="URGENT">Urgente</option></select></label></div>
+                <label>Adjuntos <span class="label-help">Imágenes, videos, documentos o audio</span><input id="attachments" type="file" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt" /></label>
+                <div id="attachment-preview" class="attachment-preview"></div>
+                <div class="two-columns"><label>Correo del solicitante<input id="requester-email" type="email" maxlength="254" /></label><label>Nombre del solicitante<input id="requester-name" maxlength="200" /></label></div>
+                <button type="submit" class="primary-button">Crear solicitud</button>
+              </form>
+            </section>
             <section id="detail" class="card detail" hidden></section>
+            <section id="user-panel" class="user-panel" hidden>
+              <div class="page-heading"><div><p class="eyebrow">Administración</p><h2>Usuarios de la mesa de ayuda</h2><p>Gestiona agentes y administradores que pueden recibir tickets.</p></div><span class="jira-mark">US</span></div>
+              <div class="user-admin-grid">
+                <section class="card user-form-card"><div class="card-heading"><div><p class="eyebrow">Nuevo integrante</p><h2>Crear usuario</h2></div></div><form id="user-form"><label>Nombre<input id="user-name" maxlength="160" required /></label><label>Correo<input id="user-email" type="email" maxlength="254" required /></label><label>Contraseña <span class="label-help">Mínimo 10 caracteres</span><input id="user-password" type="password" minlength="10" required /></label><label>Rol<select id="user-role"><option value="AGENT">Agente</option><option value="ADMIN">Administrador</option></select></label><button type="submit" class="primary-button">Crear usuario</button></form></section>
+                <section class="card user-list-card"><div class="card-heading"><div><p class="eyebrow">Equipo</p><h2>Usuarios registrados</h2></div></div><div id="users-list" class="users-list"></div></section>
+              </div>
+            </section>
           </div>
         </section>
       </section>
