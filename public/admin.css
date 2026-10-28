@@ -1,4 +1,4 @@
-.dashboard-heading[hidden], #dashboard-heading[hidden], #stats[hidden], #workspace-grid[hidden], #create-modal[hidden], #create-panel[hidden], #edit-user-modal[hidden], #role-modal[hidden], #detail[hidden], #user-panel[hidden] { display: none !important; }
+.dashboard-heading[hidden], #dashboard-heading[hidden], #stats[hidden], #workspace-grid[hidden], #create-modal[hidden], #create-panel[hidden], #edit-user-modal[hidden], #role-modal[hidden], #detail[hidden], #user-panel[hidden], #roles-card[hidden], #user-admin-grid[hidden] { display: none !important; }
 .workspace-grid { display: block; }
 .tickets-card { width: 100%; }
 .filters { grid-template-columns: minmax(220px, 2fr) repeat(5, minmax(120px, 1fr)); }

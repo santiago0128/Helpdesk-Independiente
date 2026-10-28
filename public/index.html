@@ -6,7 +6,7 @@
     <title>Revex Helpdesk</title>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/kanban.css" />
-    <link rel="stylesheet" href="/admin.css?v=motion-1" />
+    <link rel="stylesheet" href="/admin.css?v=admin-split-1" />
   </head>
   <body>
     <main class="shell">
@@ -31,6 +31,7 @@
           <nav class="sidebar-nav" aria-label="Navegación principal">
             <button class="nav-item active" data-status=""><span>▦</span> Resumen</button>
             <button id="users-nav" class="nav-item" data-view="users"><span>⚙</span> Usuarios</button>
+            <button id="roles-nav" class="nav-item" data-view="roles"><span>◈</span> Roles y permisos</button>
           </nav>
           <div class="sidebar-footer"><div class="support-note"><strong>¿Necesitas ayuda?</strong><span>Crea una solicitud y el equipo la revisará.</span></div><button id="logout" class="logout-button">Cerrar sesión</button></div>
         </aside>
@@ -71,8 +72,8 @@
             <section id="detail" class="card detail" hidden></section>
             <section id="user-panel" class="user-panel" hidden>
               <div class="page-heading"><div><p class="eyebrow">Administración</p><h2>Usuarios de la mesa de ayuda</h2><p>Gestiona agentes y administradores que pueden recibir tickets.</p></div><span class="jira-mark">US</span></div>
-              <section class="card roles-card"><div class="card-heading"><div><p class="eyebrow">Permisos y acceso</p><h2>Roles</h2><p>Define qué puede hacer cada integrante de la mesa de ayuda.</p></div><button id="new-role" type="button" class="secondary" hidden>＋ Nuevo rol</button></div><div id="roles-list" class="roles-list"></div></section>
-              <div class="user-admin-grid">
+              <section id="roles-card" class="card roles-card" hidden><div class="card-heading"><div><p class="eyebrow">Permisos y acceso</p><h2>Roles y permisos</h2><p>Define qué puede hacer cada integrante de la mesa de ayuda.</p></div><button id="new-role" type="button" class="secondary" hidden>＋ Nuevo rol</button></div><div id="roles-list" class="roles-list"></div></section>
+              <div id="user-admin-grid" class="user-admin-grid">
                 <section class="card user-form-card"><div class="card-heading"><div><p class="eyebrow">Nuevo integrante</p><h2>Crear usuario</h2></div></div><form id="user-form"><label>Nombre<input id="user-name" maxlength="160" required /></label><label>Correo<input id="user-email" type="email" maxlength="254" required /></label><label>Contraseña <span class="label-help">Mínimo 10 caracteres</span><input id="user-password" type="password" minlength="10" required /></label><label>Rol<select id="user-role" required></select></label><button type="submit" class="primary-button">Crear usuario</button></form></section>
                 <section class="card user-list-card"><div class="card-heading"><div><p class="eyebrow">Equipo</p><h2>Usuarios registrados</h2><p>Edita el perfil, rol, contraseña o estado de cada usuario.</p></div></div><div id="users-list" class="users-list"></div></section>
               </div>
@@ -83,7 +84,7 @@
         </section>
       </section>
     </main>
-    <script src="/app.js?v=sidebar-clean-1"></script>
+    <script src="/app.js?v=admin-split-1"></script>
     <script src="/detail-enhancements.js?v=case-open-1"></script>
   </body>
 </html>
