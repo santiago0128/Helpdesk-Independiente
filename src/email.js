@@ -35,7 +35,7 @@ export const notifyTicketChanged = async ({ before, ticket }) => {
   const recipients = new Set(masterRecipients());
   const assignmentChanged = (before?.assignedTo?.id || null) !== (ticket?.assignedTo?.id || null);
   const statusChanged = before?.status !== ticket?.status;
-  if (assignmentChanged && ticket.assignedTo?.email) recipients.add(ticket.assignedTo.email.toLowerCase());
+  if ((assignmentChanged || statusChanged) && ticket.assignedTo?.email) recipients.add(ticket.assignedTo.email.toLowerCase());
   if (!recipients.size || (!assignmentChanged && !statusChanged)) return { sent: false, reason: "no-notification" };
   const changes = [];
   if (statusChanged) changes.push(`Estado: ${statusLabels[before.status] || before.status} → ${statusLabels[ticket.status] || ticket.status}`);
