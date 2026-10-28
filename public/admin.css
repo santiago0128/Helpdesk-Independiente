@@ -1,3 +1,4 @@
+.dashboard-heading[hidden], #dashboard-heading[hidden], #stats[hidden], #workspace-grid[hidden], #create-panel[hidden], #detail[hidden], #user-panel[hidden] { display: none !important; }
 .workspace-grid { display: block; }
 .tickets-card { width: 100%; }
 .create-modal { margin-top: 20px; }
