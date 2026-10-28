@@ -32,3 +32,14 @@ document.addEventListener("click", (event) => { const card = event.target.closes
 document.addEventListener("click", (event) => { if (event.target.closest("#close-detail")) enhancedTicketId = null; });
 const detailObserver = new MutationObserver(() => { const detail = $("detail"); if (!detail || detail.hidden || !enhancedTicketId || detail.dataset.enhancedTicketId === String(enhancedTicketId)) return; window.setTimeout(() => renderEnhancedDetail(enhancedTicketId), 0); });
 detailObserver.observe($("detail"), { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden"] });
+
+const deepLinkedTicket = new URLSearchParams(window.location.search).get("ticket");
+if (deepLinkedTicket) {
+  const deepLinkTimer = window.setInterval(() => {
+    if (!helpdeskUser || $("app")?.hidden) return;
+    enhancedTicketId = deepLinkedTicket;
+    loadDetail(deepLinkedTicket);
+    window.clearInterval(deepLinkTimer);
+  }, 400);
+  window.setTimeout(() => window.clearInterval(deepLinkTimer), 30000);
+}
