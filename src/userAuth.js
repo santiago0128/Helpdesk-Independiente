@@ -21,73 +21,143 @@ const passwordMatches = async (password, stored) => {
 const sessionHash = (token) => crypto.createHash("sha256").update(token).digest("hex");
 const rawSessionToken = () => `hs_${crypto.randomBytes(32).toString("hex")}`;
 
-export const createUser = async ({ email, password, name, role = "AGENT" }) => {
+const parsePermissions = (value) => {
+  try { const parsed = JSON.parse(String(value || "[]")); return Array.isArray(parsed) ? parsed.map((item) => String(item)) : []; } catch { return []; }
+};
+const mapRole = (row) => row?.role_id ? { id: row.role_id, key: row.role_key || row.role, name: row.role_name || row.role_key || row.role, description: row.role_description || "", permissions: parsePermissions(row.permissions), active: row.role_active !== false } : null;
+const mapUser = (row) => ({ id: row.id, email: row.email, name: row.display_name, role: row.role_key || row.role, roleId: row.role_id || null, roleName: row.role_name || row.role_key || row.role, permissions: parsePermissions(row.permissions), active: Boolean(row.active), createdAt: row.created_at });
+const userSelect = `SELECT u.id, u.email, u.display_name, u.role, u.role_id, u.active, u.created_at,
+  r.role_key, r.display_name AS role_name, r.description AS role_description, r.permissions, r.active AS role_active
+  FROM dbo.hd_users u LEFT JOIN dbo.hd_roles r ON r.id = u.role_id`;
+const normalizePermissions = (permissions = []) => [...new Set((Array.isArray(permissions) ? permissions : []).map((item) => String(item).trim().toUpperCase()).filter((item) => ["VIEW_TICKETS", "CREATE_TICKETS", "UPDATE_TICKETS", "ASSIGN_TICKETS", "MANAGE_USERS", "MANAGE_ROLES"].includes(item)))];
+const normalizeRoleKey = (value) => {
+  const key = String(value || "").trim().toUpperCase().replace(/[^A-Z0-9_]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 30);
+  return key || `ROLE_${crypto.randomBytes(4).toString("hex").toUpperCase()}`.slice(0, 30);
+};
+const getRole = async (pool, { roleId, role } = {}) => {
+  const request = pool.request();
+  if (roleId !== undefined && roleId !== null && roleId !== "") {
+    const id = Number(roleId);
+    if (!Number.isInteger(id) || id <= 0) throw Object.assign(new Error("Rol inválido"), { status: 400 });
+    const result = await request.input("roleId", sql.Int, id).query("SELECT TOP 1 * FROM dbo.hd_roles WHERE id = @roleId AND active = 1");
+    if (!result.recordset[0]) throw Object.assign(new Error("El rol no existe o está inactivo"), { status: 400 });
+    return result.recordset[0];
+  }
+  const key = String(role || "AGENT").trim().toUpperCase();
+  const result = await request.input("roleKey", sql.NVarChar(30), key).query("SELECT TOP 1 * FROM dbo.hd_roles WHERE role_key = @roleKey AND active = 1");
+  if (!result.recordset[0]) throw Object.assign(new Error("El rol no existe o está inactivo"), { status: 400 });
+  return result.recordset[0];
+};
+
+export const createUser = async ({ email, password, name, role = "AGENT", roleId }) => {
   const normalizedEmail = clean(email, 254).toLowerCase();
   const cleanPassword = String(password || "");
   if (!normalizedEmail || !cleanPassword || cleanPassword.length < 10) {
     throw Object.assign(new Error("email y una contraseña de mínimo 10 caracteres son obligatorios"), { status: 400 });
   }
   const pool = await getPool();
+  const selectedRole = await getRole(pool, { roleId, role });
   const hash = await passwordHash(cleanPassword);
   const result = await pool.request()
     .input("email", sql.NVarChar(254), normalizedEmail)
     .input("passwordHash", sql.NVarChar(300), hash)
     .input("name", sql.NVarChar(160), clean(name, 160) || normalizedEmail)
-    .input("role", sql.NVarChar(30), role === "ADMIN" ? "ADMIN" : "AGENT")
-    .query(`INSERT INTO dbo.hd_users (email, password_hash, display_name, role)
-            OUTPUT INSERTED.id, INSERTED.email, INSERTED.display_name, INSERTED.role
-            VALUES (@email, @passwordHash, @name, @role)`);
-  return result.recordset[0];
+    .input("role", sql.NVarChar(30), selectedRole.role_key)
+    .input("roleId", sql.Int, selectedRole.id)
+    .query(`INSERT INTO dbo.hd_users (email, password_hash, display_name, role, role_id)
+            OUTPUT INSERTED.id, INSERTED.email, INSERTED.display_name, INSERTED.role, INSERTED.role_id
+            VALUES (@email, @passwordHash, @name, @role, @roleId)`);
+  return { ...result.recordset[0], roleId: result.recordset[0].role_id, roleName: selectedRole.display_name, permissions: parsePermissions(selectedRole.permissions) };
 };
 
 export const listUsers = async () => {
   const pool = await getPool();
-  const result = await pool.request().query(`SELECT id, email, display_name, role, active, created_at
-    FROM dbo.hd_users ORDER BY active DESC, display_name, id`);
-  return result.recordset.map((user) => ({
-    id: user.id,
-    email: user.email,
-    name: user.display_name,
-    role: user.role,
-    active: Boolean(user.active),
-    createdAt: user.created_at,
-  }));
+  const result = await pool.request().query(`${userSelect} ORDER BY u.active DESC, u.display_name, u.id`);
+  return result.recordset.map(mapUser);
 };
 
 export const updateUser = async (id, payload = {}) => {
   const userId = Number(id);
   if (!Number.isInteger(userId) || userId <= 0) throw Object.assign(new Error("Usuario inválido"), { status: 400 });
   const name = clean(payload.name ?? payload.displayName, 160);
-  const role = payload.role === "ADMIN" ? "ADMIN" : payload.role === "AGENT" ? "AGENT" : null;
+  const email = payload.email !== undefined ? clean(payload.email, 254).toLowerCase() : null;
   const activeProvided = payload.active !== undefined;
   const active = activeProvided ? Boolean(payload.active) : null;
   const password = String(payload.password || "");
   if (payload.name !== undefined && !name) throw Object.assign(new Error("El nombre es obligatorio"), { status: 400 });
+  if (payload.email !== undefined && !email) throw Object.assign(new Error("El correo es obligatorio"), { status: 400 });
   if (password && password.length < 10) throw Object.assign(new Error("La contraseña debe tener mínimo 10 caracteres"), { status: 400 });
   const pool = await getPool();
+  const roleChanged = payload.roleId !== undefined || payload.role !== undefined;
+  const selectedRole = roleChanged ? await getRole(pool, { roleId: payload.roleId, role: payload.role }) : null;
   const hash = password ? await passwordHash(password) : null;
   const result = await pool.request()
     .input("id", sql.Int, userId)
+    .input("email", sql.NVarChar(254), email)
     .input("name", sql.NVarChar(160), name || null)
-    .input("role", sql.NVarChar(30), role)
+    .input("role", sql.NVarChar(30), selectedRole?.role_key || null)
+    .input("roleId", sql.Int, selectedRole?.id || null)
     .input("active", sql.Bit, active)
     .input("passwordHash", sql.NVarChar(300), hash)
     .query(`UPDATE dbo.hd_users SET
+      email = COALESCE(@email, email),
       display_name = COALESCE(@name, display_name),
       role = COALESCE(@role, role),
+      role_id = COALESCE(@roleId, role_id),
       active = COALESCE(@active, active),
       password_hash = COALESCE(@passwordHash, password_hash)
       OUTPUT INSERTED.id, INSERTED.email, INSERTED.display_name, INSERTED.role, INSERTED.active
       WHERE id = @id`);
   if (!result.recordset[0]) throw Object.assign(new Error("Usuario no encontrado"), { status: 404 });
   const user = result.recordset[0];
-  return { id: user.id, email: user.email, name: user.display_name, role: user.role, active: Boolean(user.active) };
+  return mapUser(user);
+};
+
+export const listRoles = async () => {
+  const pool = await getPool();
+  const result = await pool.request().query("SELECT id, role_key, display_name, description, permissions, active, built_in, created_at FROM dbo.hd_roles ORDER BY built_in DESC, active DESC, display_name, id");
+  return result.recordset.map((role) => ({ id: role.id, key: role.role_key, name: role.display_name, description: role.description || "", permissions: parsePermissions(role.permissions), active: Boolean(role.active), builtIn: Boolean(role.built_in), createdAt: role.created_at }));
+};
+
+export const createRole = async ({ key, name, description, permissions }) => {
+  const roleName = clean(name, 120);
+  if (!roleName) throw Object.assign(new Error("El nombre del rol es obligatorio"), { status: 400 });
+  const roleKey = normalizeRoleKey(key || roleName);
+  const selectedPermissions = normalizePermissions(permissions);
+  const pool = await getPool();
+  const result = await pool.request()
+    .input("key", sql.NVarChar(30), roleKey)
+    .input("name", sql.NVarChar(120), roleName)
+    .input("description", sql.NVarChar(300), clean(description, 300) || null)
+    .input("permissions", sql.NVarChar(sql.MAX), JSON.stringify(selectedPermissions))
+    .query(`INSERT INTO dbo.hd_roles (role_key, display_name, description, permissions)
+      OUTPUT INSERTED.id, INSERTED.role_key, INSERTED.display_name, INSERTED.description, INSERTED.permissions, INSERTED.active, INSERTED.built_in, INSERTED.created_at
+      VALUES (@key, @name, @description, @permissions)`);
+  const role = result.recordset[0];
+  return { id: role.id, key: role.role_key, name: role.display_name, description: role.description || "", permissions: parsePermissions(role.permissions), active: Boolean(role.active), builtIn: Boolean(role.built_in), createdAt: role.created_at };
+};
+
+export const updateRole = async (id, payload = {}) => {
+  const roleId = Number(id);
+  if (!Number.isInteger(roleId) || roleId <= 0) throw Object.assign(new Error("Rol inválido"), { status: 400 });
+  const name = payload.name !== undefined ? clean(payload.name, 120) : null;
+  const description = payload.description !== undefined ? clean(payload.description, 300) : null;
+  const active = payload.active !== undefined ? Boolean(payload.active) : null;
+  const permissions = payload.permissions !== undefined ? JSON.stringify(normalizePermissions(payload.permissions)) : null;
+  if (payload.name !== undefined && !name) throw Object.assign(new Error("El nombre del rol es obligatorio"), { status: 400 });
+  const pool = await getPool();
+  const result = await pool.request().input("id", sql.Int, roleId).input("name", sql.NVarChar(120), name).input("description", sql.NVarChar(300), description).input("active", sql.Bit, active).input("permissions", sql.NVarChar(sql.MAX), permissions)
+    .query(`UPDATE dbo.hd_roles SET display_name = COALESCE(@name, display_name), description = COALESCE(@description, description), active = COALESCE(@active, active), permissions = COALESCE(@permissions, permissions)
+      OUTPUT INSERTED.id, INSERTED.role_key, INSERTED.display_name, INSERTED.description, INSERTED.permissions, INSERTED.active, INSERTED.built_in, INSERTED.created_at WHERE id = @id`);
+  if (!result.recordset[0]) throw Object.assign(new Error("Rol no encontrado"), { status: 404 });
+  const role = result.recordset[0];
+  return { id: role.id, key: role.role_key, name: role.display_name, description: role.description || "", permissions: parsePermissions(role.permissions), active: Boolean(role.active), builtIn: Boolean(role.built_in), createdAt: role.created_at };
 };
 
 export const loginUser = async ({ email, password }) => {
   const pool = await getPool();
   const result = await pool.request().input("email", sql.NVarChar(254), clean(email, 254).toLowerCase())
-    .query("SELECT TOP 1 * FROM dbo.hd_users WHERE email = @email AND active = 1");
+    .query(`${userSelect} WHERE u.email = @email AND u.active = 1`);
   const user = result.recordset[0];
   if (!user || !(await passwordMatches(password, user.password_hash))) {
     throw Object.assign(new Error("Correo o contraseña incorrectos"), { status: 401 });
@@ -98,7 +168,7 @@ export const loginUser = async ({ email, password }) => {
     .input("tokenHash", sql.VarChar(64), sessionHash(rawToken))
     .input("expiresAt", sql.DateTime2, new Date(Date.now() + sessionTtlDays * 86400000))
     .query("INSERT INTO dbo.hd_sessions (user_id, token_hash, expires_at) VALUES (@userId, @tokenHash, @expiresAt)");
-  return { token: rawToken, user: { id: user.id, email: user.email, name: user.display_name, role: user.role } };
+  return { token: rawToken, user: mapUser(user) };
 };
 
 const getSessionToken = (req) => {
@@ -113,11 +183,13 @@ export const requireUser = async (req, res, next) => {
   try {
     const pool = await getPool();
     const result = await pool.request().input("tokenHash", sql.VarChar(64), sessionHash(rawToken))
-      .query(`SELECT TOP 1 u.id, u.email, u.display_name, u.role
+      .query(`SELECT TOP 1 u.id, u.email, u.display_name, u.role, u.role_id, u.active,
+                r.role_key, r.display_name AS role_name, r.description AS role_description, r.permissions, r.active AS role_active
               FROM dbo.hd_sessions s JOIN dbo.hd_users u ON u.id = s.user_id
+              LEFT JOIN dbo.hd_roles r ON r.id = u.role_id
               WHERE s.token_hash = @tokenHash AND s.expires_at > SYSUTCDATETIME() AND u.active = 1`);
     if (!result.recordset[0]) return res.status(401).json({ error: "Sesión expirada", logout: true });
-    req.helpdeskUser = result.recordset[0];
+    req.helpdeskUser = mapUser(result.recordset[0]);
     return next();
   } catch (error) {
     return next(error);
@@ -132,7 +204,12 @@ export const logoutUser = async (req) => {
     .query("DELETE FROM dbo.hd_sessions WHERE token_hash = @tokenHash");
 };
 
-export const requireAdmin = (req, res, next) => {
-  if (req.helpdeskUser?.role !== "ADMIN") return res.status(403).json({ error: "Solo un administrador puede realizar esta acción" });
+export const requirePermission = (permission) => (req, res, next) => {
+  if (!req.helpdeskUser?.permissions?.includes(permission)) return res.status(403).json({ error: "No tienes permisos para realizar esta acción" });
   return next();
 };
+export const requireAnyPermission = (permissions) => (req, res, next) => {
+  if (!permissions.some((permission) => req.helpdeskUser?.permissions?.includes(permission))) return res.status(403).json({ error: "No tienes permisos para realizar esta acción" });
+  return next();
+};
+export const requireAdmin = requirePermission("MANAGE_USERS");
