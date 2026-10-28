@@ -40,6 +40,7 @@ $("refresh").addEventListener("click", () => loadTickets().catch((error) => show
 $("new-ticket").addEventListener("click", () => { showBoard(document.querySelector(".nav-item[data-status='']")); $("create-modal").hidden = false; setTimeout(() => $("title").focus(), 100); });
 $("close-create").addEventListener("click", () => { $("create-modal").hidden = true; });
 $("create-modal").addEventListener("click", (event) => { if (event.target === $("create-modal")) $("create-modal").hidden = true; });
+document.addEventListener("click", (event) => { const closeButton = event.target.closest("[data-close-modal]"); if (!closeButton) return; event.preventDefault(); const modal = $(closeButton.dataset.closeModal); if (modal) modal.hidden = true; });
 document.addEventListener("keydown", (event) => { if (event.key !== "Escape") return; ["create-modal", "edit-user-modal", "role-modal"].forEach((id) => { if ($(id) && !$(id).hidden) $(id).hidden = true; }); });
 $("edit-user-modal").addEventListener("click", (event) => { if (event.target === $("edit-user-modal")) $("edit-user-modal").hidden = true; });
 $("role-modal").addEventListener("click", (event) => { if (event.target === $("role-modal")) $("role-modal").hidden = true; });
