@@ -43,3 +43,19 @@ if (deepLinkedTicket) {
   }, 400);
   window.setTimeout(() => window.clearInterval(deepLinkTimer), 30000);
 }
+
+const addOpenTicketButtons = () => {
+  document.querySelectorAll(".kanban-card").forEach((card) => {
+    if (card.querySelector(".ticket-open-button")) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ticket-open-button";
+    button.textContent = "Abrir caso";
+    button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); enhancedTicketId = card.dataset.id; loadDetail(card.dataset.id); });
+    const footer = card.querySelector(".ticket-card-footer");
+    if (footer) footer.appendChild(button); else card.appendChild(button);
+  });
+};
+const boardObserver = new MutationObserver(addOpenTicketButtons);
+boardObserver.observe($("tickets"), { childList: true, subtree: true });
+addOpenTicketButtons();

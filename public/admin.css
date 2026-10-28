@@ -8,6 +8,8 @@
 .detail:not([hidden]) { position: fixed; inset: 4vh 6vw; z-index: 1800; overflow-y: auto; max-height: 92vh; padding: 28px; border: 1px solid #c1c7d0; box-shadow: 0 20px 60px rgba(9, 30, 66, .35); }
 .detail-control { display: grid; gap: 5px; color: #42526e; font-size: 10px; font-weight: 800; text-align: left; text-transform: uppercase; }
 .detail-control select { min-width: 170px; text-transform: none; }
+.ticket-open-button { margin-left: auto; padding: 5px 8px; border: 0; border-radius: 4px; background: #deebff; color: #0747a6; cursor: pointer; font-size: 10px; font-weight: 800; }
+.ticket-open-button:hover { background: #b3d4ff; }
 .priority-urgent { color: #de350b; font-weight: 800; }
 .priority-high { color: #ff5630; font-weight: 700; }
 .priority-medium { color: #42526e; }
