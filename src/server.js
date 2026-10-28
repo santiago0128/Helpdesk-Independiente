@@ -24,6 +24,11 @@ const upload = multer({
   dest: uploadTempDir,
   limits: { files: 10, fileSize: 50 * 1024 * 1024 },
 });
+const validateUploadTotal = (req, _res, next) => {
+  const total = (req.files || []).reduce((sum, file) => sum + (Number(file.size) || 0), 0);
+  if (total > 100 * 1024 * 1024) return next(Object.assign(new Error("El total de los adjuntos no puede superar 100 MB"), { status: 413 }));
+  return next();
+};
 
 const handle = (fn) => async (req, res, next) => {
   try { return await fn(req, res); } catch (error) { return next(error); }
@@ -38,12 +43,12 @@ app.post("/api/v1/auth/login", handle(async (req, res) => res.json(await loginUs
 app.get("/api/v1/auth/me", requireUser, handle(async (req, res) => res.json({ user: req.helpdeskUser })));
 app.post("/api/v1/auth/logout", requireUser, handle(async (req, res) => { await logoutUser(req); res.json({ ok: true }); }));
 
-app.post("/api/v1/integrations/tickets", requireToken(["INTEGRATION", "ADMIN"]), upload.array("attachments", 10), handle(async (req, res) => {
+app.post("/api/v1/integrations/tickets", requireToken(["INTEGRATION", "ADMIN"]), upload.array("attachments", 10), validateUploadTotal, handle(async (req, res) => {
   const result = await createTicket({ payload: req.body, files: req.files || [], source: req.helpdeskToken.source });
   res.status(result.duplicate ? 200 : 201).json({ message: result.duplicate ? "Ticket existente" : "Ticket creado", ...result });
 }));
 
-app.post("/api/v1/tickets", requireUser, upload.array("attachments", 10), handle(async (req, res) => {
+app.post("/api/v1/tickets", requireUser, upload.array("attachments", 10), validateUploadTotal, handle(async (req, res) => {
   const result = await createTicket({ payload: req.body, files: req.files || [], source: "helpdesk-ui", uploadedBy: req.helpdeskUser.email });
   res.status(result.duplicate ? 200 : 201).json(result);
 }));
