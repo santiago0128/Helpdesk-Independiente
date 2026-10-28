@@ -61,3 +61,38 @@
 .user-row:last-child { border-bottom: 0; }.user-row-avatar { display: grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; background: #deebff; color: #0747a6; font-size: 13px; font-weight: 800; }.user-row-main { display: grid; flex: 1; min-width: 0; gap: 3px; }.user-row-main strong { overflow: hidden; color: #172b4d; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }.user-row-main span { overflow: hidden; color: #6b778c; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.user-role { color: #6b778c; font-size: 11px; white-space: nowrap; }.user-status { padding: 5px 9px; border: 0; border-radius: 4px; font-size: 10px; font-weight: 800; }.user-status.active { background: #e3fcef; color: #006644; }.user-status.inactive { background: #ffebe6; color: #de350b; }
 @media (max-width: 1100px) { .filters { grid-template-columns: repeat(3, minmax(140px, 1fr)); } }
 @media (max-width: 760px) { .user-admin-grid { grid-template-columns: 1fr; }.user-row { flex-wrap: wrap; }.user-role { margin-left: 46px; }.user-status { margin-left: auto; }.role-row { flex-wrap: wrap; }.role-row code { order: 3; margin-left: 0; }.filters { grid-template-columns: 1fr; }.modal-backdrop { align-items: flex-end; padding: 0; }.modal-card { max-height: 92vh; border-radius: 14px 14px 0 0; }.detail:not([hidden]) { inset: 0; max-height: 100vh; padding: 18px; border-radius: 0; }.detail-layout { grid-template-columns: 1fr; }.detail-actions { align-items: stretch; flex-wrap: wrap; }.detail-control { flex: 1 1 160px; } }
+
+/* Visual polish: compact Jira-like workspace */
+body { background: #f4f5f7; }
+.app-layout { background: #f4f5f7; }
+.sidebar { position: sticky; top: 0; height: 100vh; padding: 24px 14px 18px; }
+.sidebar-brand { padding: 0 12px 24px; }
+.workspace-name { margin-top: 22px; }
+.nav-item { min-height: 42px; }
+.topbar { position: sticky; top: 0; z-index: 100; min-height: 72px; box-shadow: 0 1px 0 rgba(9, 30, 66, .04); }
+.page-content { padding-top: 30px; }
+.page-heading h2 { letter-spacing: -.02em; }
+.stats { gap: 16px; }
+.stat-card { transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.stat-card:hover { transform: translateY(-2px); border-color: #b3d4ff; box-shadow: 0 5px 14px rgba(9, 30, 66, .1); }
+.tickets-card { border-color: #cbd2dc; box-shadow: 0 4px 14px rgba(9, 30, 66, .07); }
+.tickets-card > .card-heading { padding-bottom: 20px; }
+.filters { margin: 18px 0 18px; padding: 12px; border: 1px solid #ebecf0; border-radius: 8px; background: #f7f8fa; }
+.filters input, .filters select { border-color: #c1c7d0; background: #fff; }
+.kanban-board { gap: 14px; }
+.board-column { border: 1px solid #ebecf0; background: #f7f8fa; }
+.column-heading { padding: 14px 12px 11px; }
+.drop-zone { padding: 0 9px 9px; }
+.kanban-card { gap: 9px; border-color: #dfe1e6; border-radius: 8px; padding: 13px; box-shadow: 0 2px 4px rgba(9, 30, 66, .1); transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+.kanban-card:hover { transform: translateY(-1px); border-color: #4c9aff; box-shadow: 0 6px 13px rgba(9, 30, 66, .14); }
+.ticket-card-footer { min-height: 28px; }
+.ticket-open-button { opacity: .9; }
+.detail:not([hidden]) { border-radius: 14px; background: #f7f8fa; }
+.detail:not([hidden]) .detail-header { padding-bottom: 20px; border-bottom: 1px solid #dfe1e6; }
+.detail:not([hidden]) .detail-title .eyebrow { color: #0052cc; }
+.activity-panel { box-shadow: 0 2px 8px rgba(9, 30, 66, .06); }
+.message-form { box-shadow: 0 2px 8px rgba(9, 30, 66, .05); }
+.user-panel .page-heading { margin-bottom: 24px; }
+.roles-card, .user-form-card, .user-list-card { border-color: #cbd2dc; box-shadow: 0 3px 10px rgba(9, 30, 66, .06); }
+.modal-card { border-color: #c1c7d0; box-shadow: 0 18px 50px rgba(9, 30, 66, .24); }
+@media (max-width: 760px) { .sidebar { position: static; height: auto; }.topbar { position: static; }.page-content { padding-top: 22px; }.filters { padding: 10px; }.tickets-card { box-shadow: 0 2px 8px rgba(9, 30, 66, .06); } }
