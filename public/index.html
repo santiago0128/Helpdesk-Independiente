@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Revex Helpdesk</title>
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/kanban.css" />
   </head>
   <body>
     <main class="shell">
@@ -63,7 +64,7 @@
               </section>
 
               <section class="card tickets-card">
-                <div class="card-heading"><div><p class="eyebrow">Bandeja de entrada</p><h2>Tickets recientes</h2></div><span class="jira-mark muted-mark">TK</span></div>
+                <div class="card-heading"><div><p class="eyebrow">Bandeja de entrada</p><h2>Tablero de tickets</h2><p class="board-hint">Arrastra las tarjetas para cambiar su estado.</p></div><span class="jira-mark muted-mark">TK</span></div>
                 <div class="filters"><div class="search-wrap"><span>⌕</span><input id="search" placeholder="Buscar por título, código o correo..." /></div><select id="status"><option value="">Todos los estados</option><option value="OPEN">Abiertos</option><option value="IN_PROGRESS">En proceso</option><option value="WAITING">En espera</option><option value="RESOLVED">Resueltos</option><option value="CLOSED">Cerrados</option></select></div>
                 <div id="tickets" class="tickets"></div>
               </section>

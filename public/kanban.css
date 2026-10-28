@@ -1,0 +1,15 @@
+.board-hint { margin-top: 5px; color: #6b778c; font-size: 11px; }
+.kanban-board { display: grid; grid-template-columns: repeat(5, minmax(190px, 1fr)); gap: 10px; min-width: 980px; }
+.tickets-card { overflow-x: auto; }
+.board-column { min-height: 340px; border-radius: 7px; background: #f4f5f7; }
+.column-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px 10px; color: #42526e; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.column-heading > div { display: flex; align-items: center; gap: 7px; }
+.column-dot { width: 8px; height: 8px; border-radius: 50%; }
+.column-dot.status-open { background: #0052cc; }.column-dot.status-progress { background: #5243aa; }.column-dot.status-waiting { background: #de350b; }.column-dot.status-resolved { background: #006644; }.column-dot.status-closed { background: #6b778c; }
+.column-count { display: grid; place-items: center; min-width: 21px; height: 21px; border-radius: 4px; background: #fff; color: #6b778c; font-size: 11px; }
+.drop-zone { min-height: 290px; padding: 0 8px 8px; border: 2px solid transparent; border-radius: 6px; transition: background .15s, border-color .15s; }
+.drop-zone.drag-over { border-color: #4c9aff; background: #deebff; }
+.kanban-card { position: relative; gap: 8px; margin-bottom: 8px; padding: 12px; border: 1px solid #dfe1e6; border-radius: 6px; background: #fff; box-shadow: 0 1px 2px rgba(9,30,66,.12); cursor: grab; }
+.kanban-card:hover { border-color: #4c9aff; box-shadow: 0 3px 8px rgba(9,30,66,.16); }.kanban-card:active, .kanban-card.dragging { cursor: grabbing; opacity: .55; }
+.ticket-card-top, .ticket-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }.ticket-number { color: #6b778c; font-size: 10px; font-weight: 800; }.drag-handle { color: #8993a4; font-size: 16px; line-height: 1; }.kanban-card .ticket-title { font-size: 12px; line-height: 1.4; }.kanban-card .ticket-subtitle { overflow: hidden; color: #6b778c; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.kanban-card .ticket-meta { gap: 5px; }.kanban-card .ticket-meta > span:not(.badge) { color: #6b778c; font-size: 10px; }.ticket-card-footer { margin-top: 2px; color: #8993a4; font-size: 10px; }.ticket-avatar { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #deebff; color: #0747a6; font-size: 10px; font-weight: 800; }.empty-column { padding: 22px 8px; color: #8993a4; font-size: 11px; text-align: center; }
+@media (max-width: 1100px) { .kanban-board { grid-template-columns: repeat(5, minmax(180px, 1fr)); } }
