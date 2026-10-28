@@ -4,6 +4,7 @@ import { addAttachments, listAttachments } from "./attachments.js";
 
 const statuses = ["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED", "CLOSED"];
 const priorities = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const requestTypes = ["BUG", "FEATURE", "QUESTION", "ACCESS", "OTHER"];
 const text = (value, max) => String(value ?? "").trim().slice(0, max);
 const positiveInt = (value) => Number.isInteger(Number(value)) && Number(value) > 0 ? Number(value) : null;
 const normalize = (value, values, fallback) => {
@@ -25,6 +26,7 @@ const mapTicket = (row) => ({
   source: row.source,
   title: row.title,
   description: row.description,
+  requestType: row.request_type || "OTHER",
   priority: row.priority,
   status: row.status,
   requester: { name: row.requester_name || "", email: row.requester_email || "" },
@@ -53,18 +55,20 @@ export const createTicket = async ({ payload = {}, source = "unknown", files = [
   }
 
   const requester = objectValue(payload.requester ?? payload.solicitante);
+  const requestType = normalize(payload.requestType ?? payload.request_type ?? payload.tipo, requestTypes, "OTHER");
   const insert = await pool.request()
     .input("source", sql.NVarChar(80), text(source, 80) || "unknown")
     .input("externalId", sql.NVarChar(120), externalId)
     .input("title", sql.NVarChar(200), title)
     .input("description", sql.NVarChar(sql.MAX), description)
+    .input("requestType", sql.NVarChar(30), requestType)
     .input("priority", sql.NVarChar(20), normalize(payload.priority ?? payload.prioridad, priorities, "MEDIUM"))
     .input("requesterName", sql.NVarChar(200), text(requester.name ?? requester.nombre, 200) || null)
     .input("requesterEmail", sql.NVarChar(254), text(requester.email ?? requester.correo, 254) || null)
     .query(`INSERT INTO dbo.hd_tickets
-      (source, external_id, title, description, priority, requester_name, requester_email)
+      (source, external_id, title, description, request_type, priority, requester_name, requester_email)
       OUTPUT INSERTED.*
-      VALUES (@source, @externalId, @title, @description, @priority, @requesterName, @requesterEmail)`);
+      VALUES (@source, @externalId, @title, @description, @requestType, @priority, @requesterName, @requesterEmail)`);
   const row = insert.recordset[0];
   const attachments = await addAttachments({ ticketId: row.id, files, uploadedBy });
   return { duplicate: false, ticket: mapTicket(row), attachments };
