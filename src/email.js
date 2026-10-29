@@ -10,6 +10,7 @@ const priorityLabels = { LOW: "Baja", MEDIUM: "Media", HIGH: "Alta", URGENT: "Ur
 const safe = (value) => String(value ?? "").replace(/[<>]/g, "");
 const ticketUrl = (ticket) => `${appUrl}/?ticket=${encodeURIComponent(ticket.id)}`;
 const ticketSummary = (ticket) => `<p><strong>${safe(ticket.number)}</strong> · ${safe(ticket.title)}</p><p>Tipo: ${safe(ticket.requestType)}<br>Prioridad: ${safe(priorityLabels[ticket.priority] || ticket.priority)}<br>Estado: ${safe(statusLabels[ticket.status] || ticket.status)}<br>Responsable: ${safe(ticket.assignedTo?.name || "Sin asignar")}</p><p><a href="${ticketUrl(ticket)}">Abrir ticket en Revex Helpdesk</a></p>`;
+const passwordResetUrl = (token) => `${appUrl}/?reset=${encodeURIComponent(token)}`;
 
 const send = async ({ to, subject, html }) => {
   const recipients = splitEmails(to);
@@ -42,5 +43,11 @@ export const notifyTicketChanged = async ({ before, ticket }) => {
   if (assignmentChanged) changes.push(`Responsable: ${before.assignedTo?.name || "Sin asignar"} → ${ticket.assignedTo?.name || "Sin asignar"}`);
   return send({ to: [...recipients], subject: `[Helpdesk] Actualización ${ticket.number}: ${changes.join(" · ")}`, html: `<h2>El caso fue actualizado</h2>${ticketSummary(ticket)}<p>${changes.map(safe).join("<br>")}</p>` });
 };
+
+export const notifyPasswordReset = async ({ email, name, token }) => send({
+  to: [email],
+  subject: "[Helpdesk] Recuperación de contraseña",
+  html: `<h2>Recupera el acceso a Revex Helpdesk</h2><p>Hola ${safe(name || "")}, recibimos una solicitud para cambiar tu contraseña.</p><p><a href="${passwordResetUrl(token)}">Crear una nueva contraseña</a></p><p>El enlace vence en una hora. Si no solicitaste este cambio, ignora este mensaje.</p>`,
+});
 
 export const emailStatus = () => ({ smtpConfigured: configured(), masterRecipients: masterRecipients(), publicUrl: appUrl });

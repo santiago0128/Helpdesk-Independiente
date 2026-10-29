@@ -1,9 +1,14 @@
 import crypto from "node:crypto";
 import { promisify } from "node:util";
 import { getPool, sql } from "./db.js";
+import { recordAudit } from "./audit.js";
+import { notifyPasswordReset } from "./email.js";
+import { getSecurityState, withSecurityState } from "./securityState.js";
 
 const scrypt = promisify(crypto.scrypt);
-const sessionTtlDays = 7;
+const sessionTtlHours = Math.max(Number(process.env.HELPDESK_SESSION_TTL_HOURS || 12), 1);
+const maxLoginFailures = Math.max(Number(process.env.HELPDESK_MAX_LOGIN_FAILURES || 5), 3);
+const lockMinutes = Math.max(Number(process.env.HELPDESK_LOCK_MINUTES || 15), 5);
 
 const clean = (value, max) => String(value ?? "").trim().slice(0, max);
 const passwordHash = async (password) => {
@@ -154,21 +159,73 @@ export const updateRole = async (id, payload = {}) => {
   return { id: role.id, key: role.role_key, name: role.display_name, description: role.description || "", permissions: parsePermissions(role.permissions), active: Boolean(role.active), builtIn: Boolean(role.built_in), createdAt: role.created_at };
 };
 
-export const loginUser = async ({ email, password }) => {
+export const loginUser = async ({ email, password, ipAddress = null, userAgent = null }) => {
   const pool = await getPool();
-  const result = await pool.request().input("email", sql.NVarChar(254), clean(email, 254).toLowerCase())
-    .query(`${userSelect} WHERE u.email = @email AND u.active = 1`);
+  const normalizedEmail = clean(email, 254).toLowerCase();
+  const result = await pool.request().input("email", sql.NVarChar(254), normalizedEmail)
+    .query(`${userSelect.replace("u.created_at,", "u.created_at, u.password_hash,")} WHERE u.email = @email AND u.active = 1`);
   const user = result.recordset[0];
+  const state = await getSecurityState();
+  const loginState = state.login?.[normalizedEmail] || { failures: 0, lockedUntil: null };
+  if (loginState.lockedUntil && new Date(loginState.lockedUntil).getTime() > Date.now()) {
+    await recordAudit({ action: "LOGIN_BLOCKED", entityType: "USER", entityId: user.id, ipAddress, userAgent });
+    throw Object.assign(new Error("Cuenta temporalmente bloqueada por demasiados intentos. Intenta más tarde."), { status: 429 });
+  }
   if (!user || !(await passwordMatches(password, user.password_hash))) {
+    if (user) {
+      const failures = Number(loginState.failures || 0) + 1;
+      const lockedUntil = failures >= maxLoginFailures ? new Date(Date.now() + lockMinutes * 60 * 1000).toISOString() : null;
+      await withSecurityState((current) => { current.login = current.login || {}; current.login[normalizedEmail] = { failures, lockedUntil }; });
+      await recordAudit({ action: failures >= maxLoginFailures ? "LOGIN_LOCKED" : "LOGIN_FAILED", entityType: "USER", entityId: user.id, metadata: { failures }, ipAddress, userAgent });
+      if (lockedUntil) throw Object.assign(new Error("Cuenta temporalmente bloqueada por demasiados intentos. Intenta más tarde."), { status: 429 });
+    } else {
+      await recordAudit({ action: "LOGIN_FAILED", entityType: "USER", metadata: { email: normalizedEmail }, ipAddress, userAgent });
+    }
     throw Object.assign(new Error("Correo o contraseña incorrectos"), { status: 401 });
   }
+  await withSecurityState((current) => { current.login = current.login || {}; delete current.login[normalizedEmail]; });
   const rawToken = rawSessionToken();
   await pool.request()
     .input("userId", sql.Int, user.id)
     .input("tokenHash", sql.VarChar(64), sessionHash(rawToken))
-    .input("expiresAt", sql.DateTime2, new Date(Date.now() + sessionTtlDays * 86400000))
+    .input("expiresAt", sql.DateTime2, new Date(Date.now() + sessionTtlHours * 60 * 60 * 1000))
     .query("INSERT INTO dbo.hd_sessions (user_id, token_hash, expires_at) VALUES (@userId, @tokenHash, @expiresAt)");
+  await recordAudit({ actorUserId: user.id, action: "LOGIN_SUCCESS", entityType: "USER", entityId: user.id, ipAddress, userAgent });
   return { token: rawToken, user: mapUser(user) };
+};
+
+export const requestPasswordReset = async ({ email, ipAddress = null, userAgent = null }) => {
+  const normalizedEmail = clean(email, 254).toLowerCase();
+  const pool = await getPool();
+  const result = await pool.request().input("email", sql.NVarChar(254), normalizedEmail)
+    .query("SELECT TOP 1 id, email, display_name, active FROM dbo.hd_users WHERE email = @email");
+  const user = result.recordset[0];
+  if (user?.active) {
+    const rawToken = `pr_${crypto.randomBytes(32).toString("hex")}`;
+    await withSecurityState((state) => { state.resets = state.resets || {}; state.resets[sessionHash(rawToken)] = { userId: user.id, email: user.email, expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), used: false }; });
+    void notifyPasswordReset({ email: user.email, name: user.display_name, token: rawToken });
+    await recordAudit({ action: "PASSWORD_RESET_REQUESTED", entityType: "USER", entityId: user.id, ipAddress, userAgent });
+  } else {
+    await recordAudit({ action: "PASSWORD_RESET_REQUESTED", entityType: "USER", metadata: { email: normalizedEmail }, ipAddress, userAgent });
+  }
+  return { accepted: true };
+};
+
+export const resetPassword = async ({ token, password, ipAddress = null, userAgent = null }) => {
+  const cleanToken = String(token || "").trim();
+  const cleanPassword = String(password || "");
+  if (!cleanToken || cleanPassword.length < 10) throw Object.assign(new Error("El enlace y una contraseña de mínimo 10 caracteres son obligatorios"), { status: 400 });
+  const pool = await getPool();
+  const state = await getSecurityState();
+  const reset = state.resets?.[sessionHash(cleanToken)];
+  if (!reset || reset.used || new Date(reset.expiresAt).getTime() <= Date.now()) throw Object.assign(new Error("El enlace de recuperación no es válido o ya expiró"), { status: 400 });
+  const hash = await passwordHash(cleanPassword);
+  const userId = Number(reset.userId);
+  await pool.request().input("userId", sql.Int, userId).input("passwordHash", sql.NVarChar(300), hash)
+    .query("UPDATE dbo.hd_users SET password_hash = @passwordHash WHERE id = @userId; DELETE FROM dbo.hd_sessions WHERE user_id = @userId");
+  await withSecurityState((current) => { current.resets = current.resets || {}; if (current.resets[sessionHash(cleanToken)]) current.resets[sessionHash(cleanToken)].used = true; });
+  await recordAudit({ actorUserId: userId, action: "PASSWORD_RESET_COMPLETED", entityType: "USER", entityId: userId, ipAddress, userAgent });
+  return { changed: true };
 };
 
 const getSessionToken = (req) => {

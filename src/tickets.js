@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { getPool, sql } from "./db.js";
 import { addAttachments, listAttachments } from "./attachments.js";
+import { getTicketMetadata, setTicketMetadata } from "./ticketMetadata.js";
 
 const statuses = ["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED", "CLOSED"];
 const priorities = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -47,6 +48,7 @@ const mapTicket = (row) => ({
   updatedAt: row.updated_at,
   sla: mapSla(row),
 });
+const enrichTicket = async (ticket) => ({ ...ticket, requester: { ...ticket.requester, ...(await getTicketMetadata(ticket.id)) } });
 
 const validatePayload = (payload = {}) => {
   const title = text(payload.title ?? payload.titulo, 200);
@@ -65,7 +67,7 @@ export const createTicket = async ({ payload = {}, source = "unknown", files = [
       .input("source", sql.NVarChar(80), text(source, 80))
       .input("externalId", sql.NVarChar(120), externalId)
       .query("SELECT TOP 1 * FROM dbo.hd_tickets WHERE source = @source AND external_id = @externalId");
-    if (existing.recordset[0]) return { duplicate: true, ticket: mapTicket(existing.recordset[0]), attachments: await listAttachments(existing.recordset[0].id) };
+    if (existing.recordset[0]) return { duplicate: true, ticket: await enrichTicket(mapTicket(existing.recordset[0])), attachments: await listAttachments(existing.recordset[0].id) };
   }
 
   const requester = objectValue(payload.requester ?? payload.solicitante);
@@ -88,9 +90,10 @@ export const createTicket = async ({ payload = {}, source = "unknown", files = [
       OUTPUT INSERTED.*
       VALUES (@source, @externalId, @title, @description, @requestType, @priority, @requesterName, @requesterEmail, @firstDue, @resolutionDue)`);
   const row = insert.recordset[0];
+  const requesterMetadata = await setTicketMetadata(row.id, requester);
   const attachments = await addAttachments({ ticketId: row.id, files, uploadedBy });
   await pool.request().input("ticketId", sql.Int, row.id).input("actorUserId", sql.Int, actorUserId).input("eventType", sql.NVarChar(40), "CREATED").input("message", sql.NVarChar(1000), `Ticket creado desde ${text(source, 80) || "origen desconocido"}`).query("INSERT INTO dbo.hd_ticket_events (ticket_id, actor_user_id, event_type, message) VALUES (@ticketId, @actorUserId, @eventType, @message)");
-  return { duplicate: false, ticket: mapTicket(row), attachments };
+  return { duplicate: false, ticket: await enrichTicket({ ...mapTicket(row), requester: { ...mapTicket(row).requester, ...requesterMetadata } }), attachments };
 };
 
 export const listTickets = async ({ status = "", priority = "", requestType = "", assignedUserId = "", sla = "", search = "", limit = 50 } = {}) => {
@@ -113,7 +116,7 @@ export const listTickets = async ({ status = "", priority = "", requestType = ""
       AND (@sla = N'' OR (@sla = N'UNASSIGNED' AND t.assigned_user_id IS NULL) OR (@sla = N'BREACHED' AND ((t.first_response_at IS NULL AND t.sla_first_response_due_at < SYSUTCDATETIME()) OR (t.status NOT IN (N'RESOLVED', N'CLOSED') AND t.sla_resolution_due_at < SYSUTCDATETIME()))) OR (@sla = N'AT_RISK' AND ((t.first_response_at IS NULL AND t.sla_first_response_due_at BETWEEN SYSUTCDATETIME() AND DATEADD(HOUR, 2, SYSUTCDATETIME())) OR (t.status NOT IN (N'RESOLVED', N'CLOSED') AND t.sla_resolution_due_at BETWEEN SYSUTCDATETIME() AND DATEADD(HOUR, 8, SYSUTCDATETIME())))))
       AND (@search = N'%%' OR t.ticket_code LIKE @search OR t.title LIKE @search OR t.requester_email LIKE @search)
     ORDER BY t.updated_at DESC, t.id DESC`);
-  return { data: result.recordset.map(mapTicket), total: result.recordset.length };
+  return { data: await Promise.all(result.recordset.map((row) => enrichTicket(mapTicket(row)))), total: result.recordset.length };
 };
 
 export const getTicket = async (id) => {
@@ -127,7 +130,7 @@ export const getTicket = async (id) => {
     .query("SELECT id, author_type, author_name, message, created_at FROM dbo.hd_messages WHERE ticket_id = @ticketId ORDER BY created_at, id");
   const events = await pool.request().input("ticketId", sql.Int, ticketId)
     .query("SELECT e.id, e.event_type, e.from_value, e.to_value, e.message, e.created_at, u.display_name AS actor_name FROM dbo.hd_ticket_events e LEFT JOIN dbo.hd_users u ON u.id = e.actor_user_id WHERE e.ticket_id = @ticketId ORDER BY e.created_at, e.id");
-  return { ...mapTicket(ticketResult.recordset[0]), messages: messages.recordset, events: events.recordset, attachments: await listAttachments(ticketId) };
+  return { ...(await enrichTicket(mapTicket(ticketResult.recordset[0]))), messages: messages.recordset, events: events.recordset, attachments: await listAttachments(ticketId) };
 };
 
 export const updateTicket = async (id, payload = {}, actorUserId = null) => {
