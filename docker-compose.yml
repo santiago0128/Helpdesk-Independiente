@@ -1,0 +1,47 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+    ports:
+      - "${MSSQL_PORT:-1433}:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  helpdesk:
+    build: .
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      DB_SERVER: sqlserver
+      DB_PORT: 1433
+      DB_USER: sa
+      DB_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      DB_NAME: "${DB_NAME:-GLOBAL_HELPDESK}"
+      DB_ENCRYPT: "false"
+      DB_TRUST_SERVER_CERTIFICATE: "true"
+      DB_AUTO_CREATE: "true"
+    ports:
+      - "${PORT:-3200}:3200"
+    volumes:
+      - helpdesk_uploads:/app/storage/uploads
+      - helpdesk_state:/app/storage/state
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  sqlserver_data:
+  helpdesk_uploads:
+  helpdesk_state:

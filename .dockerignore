@@ -1,0 +1,8 @@
+.git
+.env
+node_modules
+npm-debug.log*
+backups
+storage/uploads
+storage/state/*.json
+storage/tmp

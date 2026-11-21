@@ -20,6 +20,7 @@ import { isAllowedUpload, validateUploadedFiles } from "./uploadSecurity.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = Number(process.env.PORT || 3200);
+const host = process.env.HOST || "127.0.0.1";
 const allowedOrigins = (process.env.CORS_ORIGINS || "https://stg.revex.com.co,https://helpdesk.revex.com.co").split(",").map((item) => item.trim()).filter(Boolean);
 
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -137,7 +138,7 @@ app.use((error, req, res, _next) => {
   res.status(status).json({ error: message });
 });
 
-getPool().then(() => app.listen(port, "127.0.0.1", () => console.log(`Helpdesk escuchando en 127.0.0.1:${port}`))).catch((error) => {
+getPool().then(() => app.listen(port, host, () => console.log(`Helpdesk escuchando en ${host}:${port}`))).catch((error) => {
   console.error("No se pudo conectar a SQL Server", error);
   process.exit(1);
 });

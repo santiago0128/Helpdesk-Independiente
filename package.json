@@ -1,23 +1,30 @@
 {
-  "name": "revex-helpdesk",
-  "version": "1.0.0",
+  "name": "helpdesk-independiente",
+  "version": "1.1.0",
+  "description": "Mesa de ayuda independiente con API REST, panel web y migraciones para SQL Server.",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "migrate": "node scripts/migrate.mjs",
+    "setup": "npm run migrate",
     "token": "node scripts/create-token.mjs",
-    "user": "node scripts/create-user.mjs"
+    "user": "node scripts/create-user.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "3.750.0",
-    "@aws-sdk/s3-request-presigner": "3.750.0",
+    "@aws-sdk/client-s3": "^3.1175.0",
+    "@aws-sdk/s3-request-presigner": "^3.1175.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
     "mssql": "^11.0.1",
-    "multer": "^1.4.5-lts.1",
-    "nodemailer": "^7.0.9"
+    "multer": "^2.5.0",
+    "nodemailer": "^10.6.1"
   }
 }

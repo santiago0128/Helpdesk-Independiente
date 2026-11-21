@@ -1,0 +1,89 @@
+{
+  "info": {
+    "_postman_id": "b334cb82-12db-46fb-80a3-1cf88934a825",
+    "name": "Helpdesk independiente",
+    "description": "Peticiones de ejemplo para validar la API y crear tickets desde Postman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Salud del servicio",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "health"]
+        }
+      }
+    },
+    {
+      "name": "Crear ticket con token de integración",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{apiToken}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"externalId\": \"POSTMAN-{{$timestamp}}\",\n  \"title\": \"No puedo ingresar al sistema\",\n  \"description\": \"El usuario recibe un mensaje de acceso denegado.\",\n  \"requestType\": \"ACCESS\",\n  \"priority\": \"HIGH\",\n  \"requester\": {\n    \"name\": \"Ana Pérez\",\n    \"email\": \"ana@example.com\",\n    \"company\": \"Empresa Demo\",\n    \"contact\": \"Ana Pérez\"\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/integrations/tickets",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "integrations", "tickets"]
+        }
+      }
+    },
+    {
+      "name": "Iniciar sesión",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  pm.environment.set('sessionToken', pm.response.json().token);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "Listar tickets con sesión",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{sessionToken}}", "type": "string" }]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/tickets",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "tickets"]
+        }
+      }
+    }
+  ]
+}
