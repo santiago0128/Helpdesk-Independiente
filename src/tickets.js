@@ -2,6 +2,9 @@ import crypto from "node:crypto";
 import { getPool, sql } from "./db.js";
 import { addAttachments, listAttachments } from "./attachments.js";
 import { getTicketMetadata, setTicketMetadata } from "./ticketMetadata.js";
+import { selectAutomaticAssignee } from "./assignment.js";
+
+export { selectAutomaticAssignee } from "./assignment.js";
 
 const statuses = ["OPEN", "IN_PROGRESS", "WAITING", "RESOLVED", "CLOSED"];
 const priorities = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -50,6 +53,20 @@ const mapTicket = (row) => ({
 });
 const enrichTicket = async (ticket) => ({ ...ticket, requester: { ...ticket.requester, ...(await getTicketMetadata(ticket.id)) } });
 
+const getAutomaticAssignee = async (pool) => {
+  const result = await pool.request().query(`SELECT u.id, u.display_name, u.email,
+      SUM(CASE WHEN t.status IN (N'OPEN', N'IN_PROGRESS', N'WAITING') THEN 1 ELSE 0 END) AS active_ticket_count,
+      MAX(t.created_at) AS last_assignment_at
+    FROM dbo.hd_users u
+    JOIN dbo.hd_roles r ON r.id = u.role_id AND r.active = 1
+    LEFT JOIN dbo.hd_tickets t ON t.assigned_user_id = u.id
+    WHERE u.active = 1
+      AND EXISTS (SELECT 1 FROM OPENJSON(CASE WHEN ISJSON(r.permissions) = 1 THEN r.permissions ELSE N'[]' END) WHERE [value] = N'VIEW_TICKETS')
+      AND EXISTS (SELECT 1 FROM OPENJSON(CASE WHEN ISJSON(r.permissions) = 1 THEN r.permissions ELSE N'[]' END) WHERE [value] = N'UPDATE_TICKETS')
+    GROUP BY u.id, u.display_name, u.email`);
+  return selectAutomaticAssignee(result.recordset);
+};
+
 const validatePayload = (payload = {}) => {
   const title = text(payload.title ?? payload.titulo, 200);
   const description = text(payload.description ?? payload.descripcion, 100000);
@@ -67,13 +84,14 @@ export const createTicket = async ({ payload = {}, source = "unknown", files = [
       .input("source", sql.NVarChar(80), text(source, 80))
       .input("externalId", sql.NVarChar(120), externalId)
       .query("SELECT TOP 1 * FROM dbo.hd_tickets WHERE source = @source AND external_id = @externalId");
-    if (existing.recordset[0]) return { duplicate: true, ticket: await enrichTicket(mapTicket(existing.recordset[0])), attachments: await listAttachments(existing.recordset[0].id) };
+    if (existing.recordset[0]) return { duplicate: true, ticket: await getTicket(existing.recordset[0].id), attachments: await listAttachments(existing.recordset[0].id) };
   }
 
   const requester = objectValue(payload.requester ?? payload.solicitante);
   const requestType = normalize(payload.requestType ?? payload.request_type ?? payload.tipo, requestTypes, "OTHER");
   const priority = normalize(payload.priority ?? payload.prioridad, priorities, "MEDIUM");
   const sla = slaHours(priority);
+  const automaticAssignee = await getAutomaticAssignee(pool);
   const insert = await pool.request()
     .input("source", sql.NVarChar(80), text(source, 80) || "unknown")
     .input("externalId", sql.NVarChar(120), externalId)
@@ -83,17 +101,28 @@ export const createTicket = async ({ payload = {}, source = "unknown", files = [
     .input("priority", sql.NVarChar(20), priority)
     .input("requesterName", sql.NVarChar(200), text(requester.name ?? requester.nombre, 200) || null)
     .input("requesterEmail", sql.NVarChar(254), text(requester.email ?? requester.correo, 254) || null)
+    .input("assignedUserId", sql.Int, automaticAssignee?.id || null)
     .input("firstDue", sql.DateTime2, new Date(Date.now() + sla.first * 60 * 60 * 1000))
     .input("resolutionDue", sql.DateTime2, new Date(Date.now() + sla.resolution * 60 * 60 * 1000))
     .query(`INSERT INTO dbo.hd_tickets
-      (source, external_id, title, description, request_type, priority, requester_name, requester_email, sla_first_response_due_at, sla_resolution_due_at)
+      (source, external_id, title, description, request_type, priority, requester_name, requester_email, assigned_user_id, sla_first_response_due_at, sla_resolution_due_at)
       OUTPUT INSERTED.*
-      VALUES (@source, @externalId, @title, @description, @requestType, @priority, @requesterName, @requesterEmail, @firstDue, @resolutionDue)`);
+      VALUES (@source, @externalId, @title, @description, @requestType, @priority, @requesterName, @requesterEmail, @assignedUserId, @firstDue, @resolutionDue)`);
   const row = insert.recordset[0];
   const requesterMetadata = await setTicketMetadata(row.id, requester);
   const attachments = await addAttachments({ ticketId: row.id, files, uploadedBy });
   await pool.request().input("ticketId", sql.Int, row.id).input("actorUserId", sql.Int, actorUserId).input("eventType", sql.NVarChar(40), "CREATED").input("message", sql.NVarChar(1000), `Ticket creado desde ${text(source, 80) || "origen desconocido"}`).query("INSERT INTO dbo.hd_ticket_events (ticket_id, actor_user_id, event_type, message) VALUES (@ticketId, @actorUserId, @eventType, @message)");
-  return { duplicate: false, ticket: await enrichTicket({ ...mapTicket(row), requester: { ...mapTicket(row).requester, ...requesterMetadata } }), attachments };
+  if (automaticAssignee) {
+    await pool.request()
+      .input("ticketId", sql.Int, row.id)
+      .input("actorUserId", sql.Int, actorUserId)
+      .input("eventType", sql.NVarChar(40), "ASSIGNED")
+      .input("toValue", sql.NVarChar(500), String(automaticAssignee.id))
+      .input("message", sql.NVarChar(1000), `Ticket asignado automáticamente a ${automaticAssignee.display_name}`)
+      .query("INSERT INTO dbo.hd_ticket_events (ticket_id, actor_user_id, event_type, to_value, message) VALUES (@ticketId, @actorUserId, @eventType, @toValue, @message)");
+  }
+  const ticket = await getTicket(row.id);
+  return { duplicate: false, ticket: ticket || await enrichTicket({ ...mapTicket(row), requester: { ...mapTicket(row).requester, ...requesterMetadata } }), attachments };
 };
 
 export const listTickets = async ({ status = "", priority = "", requestType = "", assignedUserId = "", sla = "", search = "", limit = 50 } = {}) => {
@@ -130,7 +159,8 @@ export const getTicket = async (id) => {
     .query("SELECT id, author_type, author_name, message, created_at FROM dbo.hd_messages WHERE ticket_id = @ticketId ORDER BY created_at, id");
   const events = await pool.request().input("ticketId", sql.Int, ticketId)
     .query("SELECT e.id, e.event_type, e.from_value, e.to_value, e.message, e.created_at, u.display_name AS actor_name FROM dbo.hd_ticket_events e LEFT JOIN dbo.hd_users u ON u.id = e.actor_user_id WHERE e.ticket_id = @ticketId ORDER BY e.created_at, e.id");
-  return { ...(await enrichTicket(mapTicket(ticketResult.recordset[0]))), messages: messages.recordset, events: events.recordset, attachments: await listAttachments(ticketId) };
+  const solution = [...messages.recordset].reverse().find((message) => message.author_type === "SOLUTION");
+  return { ...(await enrichTicket(mapTicket(ticketResult.recordset[0]))), solution: solution?.message || "", solutionUpdatedAt: solution?.created_at || null, messages: messages.recordset.filter((message) => message.author_type !== "SOLUTION"), events: events.recordset, attachments: await listAttachments(ticketId) };
 };
 
 export const updateTicket = async (id, payload = {}, actorUserId = null) => {
@@ -148,6 +178,11 @@ export const updateTicket = async (id, payload = {}, actorUserId = null) => {
   const beforeResult = await pool.request().input("id", sql.Int, ticketId).query("SELECT TOP 1 * FROM dbo.hd_tickets WHERE id = @id");
   const before = beforeResult.recordset[0];
   if (!before) throw Object.assign(new Error("Ticket no encontrado"), { status: 404 });
+  if (status === "CLOSED") {
+    const solutionResult = await pool.request().input("ticketId", sql.Int, ticketId)
+      .query("SELECT TOP 1 id FROM dbo.hd_messages WHERE ticket_id = @ticketId AND author_type = N'SOLUTION'");
+    if (!solutionResult.recordset[0]) throw Object.assign(new Error("Debes registrar la solución antes de cerrar el caso"), { status: 400 });
+  }
   if (assignedUserId) {
     const assigned = await pool.request().input("assignedUserId", sql.Int, assignedUserId)
       .query("SELECT TOP 1 id FROM dbo.hd_users WHERE id = @assignedUserId AND active = 1");
@@ -170,6 +205,28 @@ export const updateTicket = async (id, payload = {}, actorUserId = null) => {
   if (assignmentProvided && String(before.assigned_user_id || "") !== String(assignedUserId || "")) changes.push(["ASSIGNED", before.assigned_user_id ? String(before.assigned_user_id) : "", assignedUserId ? String(assignedUserId) : "", assignedUserId ? "Ticket asignado" : "Asignación retirada"]);
   for (const [eventType, fromValue, toValue, message] of changes) await pool.request().input("ticketId", sql.Int, ticketId).input("actorUserId", sql.Int, actorUserId).input("eventType", sql.NVarChar(40), eventType).input("fromValue", sql.NVarChar(500), fromValue || null).input("toValue", sql.NVarChar(500), toValue || null).input("message", sql.NVarChar(1000), message).query("INSERT INTO dbo.hd_ticket_events (ticket_id, actor_user_id, event_type, from_value, to_value, message) VALUES (@ticketId, @actorUserId, @eventType, @fromValue, @toValue, @message)");
   return getTicket(ticketId);
+};
+
+export const saveSolution = async (id, payload = {}, actorUserId = null) => {
+  const ticketId = positiveInt(id);
+  const solution = text(payload.solution ?? payload.solucion, 100000);
+  if (!ticketId || !solution) throw Object.assign(new Error("Debes escribir la solución que recibirá el solicitante"), { status: 400 });
+  const pool = await getPool();
+  const ticketResult = await pool.request().input("ticketId", sql.Int, ticketId).query("SELECT TOP 1 id FROM dbo.hd_tickets WHERE id = @ticketId");
+  if (!ticketResult.recordset[0]) throw Object.assign(new Error("Ticket no encontrado"), { status: 404 });
+  const previous = await pool.request().input("ticketId", sql.Int, ticketId).query("SELECT TOP 1 id FROM dbo.hd_messages WHERE ticket_id = @ticketId AND author_type = N'SOLUTION' ORDER BY created_at DESC, id DESC");
+  await pool.request()
+    .input("ticketId", sql.Int, ticketId)
+    .input("authorName", sql.NVarChar(200), text(payload.authorName, 200) || "Helpdesk")
+    .input("solution", sql.NVarChar(sql.MAX), solution)
+    .query("INSERT INTO dbo.hd_messages (ticket_id, author_type, author_name, message) VALUES (@ticketId, N'SOLUTION', @authorName, @solution)");
+  await pool.request()
+    .input("ticketId", sql.Int, ticketId)
+    .input("actorUserId", sql.Int, actorUserId)
+    .input("eventType", sql.NVarChar(40), "SOLUTION_UPDATED")
+    .input("message", sql.NVarChar(1000), previous.recordset[0] ? "Solución actualizada" : "Solución registrada")
+    .query("INSERT INTO dbo.hd_ticket_events (ticket_id, actor_user_id, event_type, message) VALUES (@ticketId, @actorUserId, @eventType, @message)");
+  return updateTicket(ticketId, { status: "CLOSED" }, actorUserId);
 };
 
 export const addMessage = async (id, payload = {}, actorUserId = null) => {

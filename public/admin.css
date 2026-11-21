@@ -128,8 +128,10 @@ body { background: #f4f5f7; }
 .jira-detail-topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 18px; border-bottom: 1px solid #dfe1e6; }
 .jira-breadcrumb { display: flex; align-items: center; gap: 9px; color: #6b778c; font-size: 12px; }
 .jira-breadcrumb strong { color: #0052cc; letter-spacing: .04em; }
-.jira-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(290px, 330px); gap: 28px; padding-top: 22px; }
+.jira-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(270px, 320px); gap: 24px; width: 100%; max-width: 100%; padding-top: 22px; }
 .jira-main-column, .jira-side-column { min-width: 0; }
+.jira-main-column { overflow: hidden; }
+.jira-side-column { width: 100%; max-width: 320px; justify-self: end; }
 .jira-ticket-heading { padding-bottom: 20px; border-bottom: 1px solid #ebecf0; }
 .jira-ticket-heading h2 { margin: 10px 0 8px; color: #172b4d; font-size: clamp(24px, 3vw, 34px); line-height: 1.15; letter-spacing: -.025em; }
 .jira-meta-line { margin: 0; color: #6b778c; font-size: 12px; }
@@ -149,5 +151,22 @@ body { background: #f4f5f7; }
 .conversation-section .message-form { margin-top: 20px; }
 .jira-side-column .section-heading { align-items: center; }
 .jira-side-column .section-heading h3 { margin: 0; }
-@media (max-width: 900px) { .jira-detail-grid { grid-template-columns: minmax(0, 1fr) 270px; gap: 18px; } }
-@media (max-width: 760px) { .detail:not([hidden]) { inset: 0; max-height: 100vh; padding: 18px; border-radius: 0; }.jira-detail-grid { grid-template-columns: 1fr; }.jira-main-column { order: 1; }.jira-side-column { order: 2; }.jira-ticket-heading h2 { font-size: 24px; }.jira-detail-topbar { padding-bottom: 14px; } }
+@media (max-width: 1050px) { .jira-detail-grid { grid-template-columns: 1fr; }.jira-main-column { order: 1; overflow: visible; }.jira-side-column { order: 2; max-width: none; justify-self: stretch; }.activity-side-card .activity-list { max-height: none; } }
+@media (max-width: 760px) { .detail:not([hidden]) { inset: 0; max-height: 100vh; padding: 18px; border-radius: 0; }.jira-ticket-heading h2 { font-size: 24px; }.jira-detail-topbar { padding-bottom: 14px; } }
+
+/* Case evidence and requester-facing solution */
+.case-attachments { margin: 0; }
+.attachment-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.case-attachment { min-width: 0; overflow: hidden; border: 1px solid #dfe1e6; border-radius: 9px; background: #fff; }
+.case-image-preview { display: block; width: 100%; height: 140px; object-fit: cover; background: #f4f5f7; border-bottom: 1px solid #dfe1e6; }
+.case-attachment .attachment-link { border: 0; border-radius: 0; }
+.case-attachment .attachment-link span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compact-upload-form, .solution-form { display: grid; min-width: 0; max-width: 100%; gap: 12px; margin-top: 14px; padding: 16px; border: 1px solid #dfe1e6; border-radius: 9px; background: #fff; }
+.compact-upload-form label, .solution-form label { display: grid; gap: 8px; color: #42526e; font-size: 12px; font-weight: 700; }
+.compact-upload-form button, .solution-form button { justify-self: start; }
+.solution-section { padding: 20px; border: 1px solid #b3d4ff; border-radius: 12px; background: #f7f9fc; }
+.solution-display { margin: 0 0 14px; padding: 16px 18px; border-left: 4px solid #6554c0; border-radius: 8px; background: #f0edff; }
+.solution-display span { color: #5243aa; font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.solution-display p { margin: 8px 0; color: #172b4d; line-height: 1.6; white-space: pre-wrap; }
+.solution-display small { color: #6b778c; }
+@media (max-width: 560px) { .attachment-gallery { grid-template-columns: 1fr; }.compact-upload-form button, .solution-form button { width: 100%; }.solution-section { padding: 15px; } }

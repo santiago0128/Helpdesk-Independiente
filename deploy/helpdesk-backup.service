@@ -1,0 +1,9 @@
+[Unit]
+Description=Revex Helpdesk database and attachment backup
+After=docker.service helpdesk.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/dev/Helpdesk
+ExecStart=/home/dev/Helpdesk/scripts/backup.sh

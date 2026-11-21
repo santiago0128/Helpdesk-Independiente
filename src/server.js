@@ -9,9 +9,9 @@ import multer from "multer";
 import { getPool, sql } from "./db.js";
 import { requireToken } from "./auth.js";
 import { createRole, createUser, listRoles, listUsers, loginUser, logoutUser, requestPasswordReset, resetPassword, requireAdmin, requireAnyPermission, requirePermission, requireUser, updateRole, updateUser } from "./userAuth.js";
-import { getAttachmentFile, uploadTempDir } from "./attachments.js";
-import { addMessage, createTicket, getTicket, listTickets, updateTicket } from "./tickets.js";
-import { emailStatus, notifyTicketChanged, notifyTicketCreated } from "./email.js";
+import { addAttachments, attachmentStorageStatus, getAttachmentFile, uploadTempDir } from "./attachments.js";
+import { addMessage, createTicket, getTicket, listTickets, saveSolution, updateTicket } from "./tickets.js";
+import { emailStatus, notifyTicketChanged, notifyTicketClosed, notifyTicketCreated } from "./email.js";
 import { deleteRole } from "./roleDeletion.js";
 import { recordAudit, listAudit } from "./audit.js";
 import { getReportSummary } from "./reports.js";
@@ -45,7 +45,7 @@ const handle = (fn) => async (req, res, next) => {
 
 app.get("/api/v1/health", handle(async (_req, res) => {
   await getPool();
-  res.json({ ok: true, service: "helpdesk" });
+  res.json({ ok: true, service: "helpdesk", attachmentStorage: attachmentStorageStatus() });
 }));
 
 app.post("/api/v1/auth/login", handle(async (req, res) => res.json(await loginUser({ ...(req.body || {}), ...requestContext(req) }))));
@@ -85,14 +85,40 @@ app.get("/api/v1/tickets/:id", requireUser, handle(async (req, res) => {
 app.patch("/api/v1/tickets/:id", requireUser, handle(async (req, res) => {
   const before = await getTicket(req.params.id);
   const ticket = await updateTicket(req.params.id, req.body, req.helpdeskUser.id);
-  if (before) void notifyTicketChanged({ before, ticket });
+  if (before) {
+    void notifyTicketChanged({ before, ticket });
+    if (before.status !== "CLOSED" && ticket.status === "CLOSED") void notifyTicketClosed(ticket);
+  }
   await auditRequest(req, "TICKET_UPDATED", "TICKET", req.params.id, { fields: Object.keys(req.body || {}) });
   return res.json({ data: ticket });
+}));
+app.post("/api/v1/tickets/:id/solution", requireUser, upload.array("attachments", 10), validateUploadTotal, handle(async (req, res) => {
+  const before = await getTicket(req.params.id);
+  const solution = String(req.body?.solution || req.body?.solucion || "").trim();
+  if (!solution) throw Object.assign(new Error("Debes escribir la solución que recibirá el solicitante"), { status: 400 });
+  await saveSolution(req.params.id, { solution, authorName: req.helpdeskUser.name || "Helpdesk" }, req.helpdeskUser.id);
+  await addAttachments({ ticketId: Number(req.params.id), files: req.files || [], uploadedBy: req.helpdeskUser.email });
+  const ticket = await getTicket(req.params.id);
+  if (before) {
+    void notifyTicketChanged({ before, ticket });
+    void notifyTicketClosed(ticket);
+  }
+  await auditRequest(req, "TICKET_SOLUTION_SAVED", "TICKET", req.params.id, { attachmentCount: (req.files || []).length, solutionLength: solution.length });
+  return res.json({ data: ticket });
+}));
+app.post("/api/v1/tickets/:id/attachments", requireUser, upload.array("attachments", 10), validateUploadTotal, handle(async (req, res) => {
+  const ticket = await getTicket(req.params.id);
+  if (!ticket) return res.status(404).json({ error: "Ticket no encontrado" });
+  if (!(req.files || []).length) throw Object.assign(new Error("Selecciona al menos un archivo"), { status: 400 });
+  const attachments = await addAttachments({ ticketId: Number(req.params.id), files: req.files || [], uploadedBy: req.helpdeskUser.email });
+  await auditRequest(req, "TICKET_ATTACHMENTS_ADDED", "TICKET", req.params.id, { attachmentCount: attachments.length });
+  return res.status(201).json({ data: await getTicket(req.params.id), attachments });
 }));
 app.post("/api/v1/tickets/:id/messages", requireUser, handle(async (req, res) => { const data = await addMessage(req.params.id, req.body, req.helpdeskUser.id); await auditRequest(req, "TICKET_MESSAGE_ADDED", "TICKET", req.params.id, { visibility: req.body?.visibility || "INTERNAL" }); return res.json({ data }); }));
 app.get("/api/v1/tickets/:id/attachments/:attachmentId", requireUser, handle(async (req, res) => {
   const attachment = await getAttachmentFile(req.params.id, req.params.attachmentId);
   if (!attachment) return res.status(404).json({ error: "Adjunto no encontrado" });
+  if (attachment.url) return res.redirect(302, attachment.url);
   res.setHeader("Content-Type", attachment.mimeType);
   res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(attachment.name)}`);
   return res.sendFile(attachment.path);

@@ -1,0 +1,9 @@
+[Unit]
+Description=Revex Helpdesk availability monitor
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/dev/Helpdesk
+EnvironmentFile=/home/dev/Helpdesk/.env
+ExecStart=/usr/bin/node /home/dev/Helpdesk/scripts/monitor.mjs

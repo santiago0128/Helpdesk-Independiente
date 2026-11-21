@@ -203,7 +203,8 @@ export const requestPasswordReset = async ({ email, ipAddress = null, userAgent 
   if (user?.active) {
     const rawToken = `pr_${crypto.randomBytes(32).toString("hex")}`;
     await withSecurityState((state) => { state.resets = state.resets || {}; state.resets[sessionHash(rawToken)] = { userId: user.id, email: user.email, expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), used: false }; });
-    void notifyPasswordReset({ email: user.email, name: user.display_name, token: rawToken });
+    const delivery = await notifyPasswordReset({ email: user.email, name: user.display_name, token: rawToken });
+    if (!delivery.sent) console.error(`[helpdesk-auth] No se pudo enviar recuperación a ${user.email}: ${delivery.reason || "unknown"}`);
     await recordAudit({ action: "PASSWORD_RESET_REQUESTED", entityType: "USER", entityId: user.id, ipAddress, userAgent });
   } else {
     await recordAudit({ action: "PASSWORD_RESET_REQUESTED", entityType: "USER", metadata: { email: normalizedEmail }, ipAddress, userAgent });

@@ -6,16 +6,17 @@
     <title>Revex Helpdesk</title>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/kanban.css" />
-    <link rel="stylesheet" href="/admin.css?v=roles-delete-2" />
+    <link rel="stylesheet" href="/admin.css?v=detail-light-1" />
     <link rel="stylesheet" href="/security-reporting.css?v=3" />
     <link rel="stylesheet" href="/ticket-list.css?v=1" />
+    <link rel="stylesheet" href="/theme-revex.css?v=detail-light-1" />
   </head>
   <body>
     <main class="shell">
       <section id="login" class="login-layout">
-        <div class="login-brand-panel"><div class="brand brand-light">REVEX <span>HELPDESK</span></div><div class="login-illustration">?</div><h1>Tu equipo, siempre acompañado.</h1><p>Centraliza solicitudes, bugs y nuevas funcionalidades en un solo lugar.</p></div>
+        <div class="login-brand-panel"><img class="revex-logo revex-logo-login" src="/assets/revex-logo.svg?v=revex-logo-1" alt="Revex" /><div class="login-illustration">?</div><h1>Tu equipo, siempre acompañado.</h1><p>Centraliza solicitudes, bugs y nuevas funcionalidades en un solo lugar.</p></div>
         <section class="card login-card">
-          <div class="brand">REVEX <span>HELPDESK</span></div>
+          <img class="revex-logo revex-logo-card" src="/assets/revex-logo.svg?v=revex-logo-1" alt="Revex Helpdesk" />
           <h1>Bienvenido</h1>
           <p>Ingresa para gestionar las solicitudes de soporte.</p>
           <form id="login-form">
@@ -29,7 +30,7 @@
 
       <section id="app" class="app-layout" hidden>
         <aside class="sidebar">
-          <div class="sidebar-brand"><div class="brand">REVEX <span>HELPDESK</span></div><div class="workspace-name"><span class="workspace-dot"></span> Mesa de ayuda</div></div>
+          <div class="sidebar-brand"><img class="revex-logo revex-logo-sidebar" src="/assets/revex-logo.svg?v=revex-logo-1" alt="Revex Helpdesk" /><div class="workspace-name"><span class="workspace-dot"></span> Mesa de ayuda</div></div>
           <nav class="sidebar-nav" aria-label="Navegación principal">
             <button class="nav-item active" data-status=""><span>▦</span> Resumen</button>
             <button id="reports-nav" class="nav-item" data-view="reports" hidden><span>▥</span> Reportes</button>
@@ -94,9 +95,9 @@
       </section>
     </main>
     <script src="/app.js?v=admin-split-1"></script>
-    <script src="/detail-enhancements.js?v=case-open-2"></script>
+    <script src="/detail-enhancements.js?v=solution-attachments-1"></script>
     <script src="/role-delete-enhancements.js?v=roles-delete-1"></script>
     <script src="/reports-enhancements.js?v=security-reporting-1"></script>
-    <script src="/auth-enhancements.js?v=security-reporting-1"></script>
+    <script src="/auth-enhancements.js?v=recovery-flow-2"></script>
   </body>
 </html>
